@@ -8,7 +8,7 @@ enabling easy testing of chains, agents, and other LangChain components.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -113,6 +113,25 @@ class LangChainMock(MockLLM):
             mock.tool_calls = response.tool_calls or []
             return mock
 
+    async def _create_async_streaming_response(self, **kwargs: Any) -> AsyncIterator[Any]:
+        """Create an async streaming response for LangChain."""
+        self._record_call(type="stream", **kwargs)
+        response = self._get_next_response()
+
+        if response.stream_chunks:
+            chunks = response.stream_chunks
+        else:
+            words = response.content.split()
+            chunks = [word + " " for word in words[:-1]] + [words[-1]] if words else [""]
+
+        for i, chunk_content in enumerate(chunks):
+            yield self._build_stream_chunk(
+                chunk_content,
+                is_first=(i == 0),
+                is_last=(i == len(chunks) - 1),
+                response_id=response.id,
+            )
+
     def _create_streaming_response(self, **kwargs: Any) -> Iterator[Any]:
         """Create a streaming response for LangChain."""
         self._record_call(type="stream", **kwargs)
@@ -176,9 +195,16 @@ class LangChainMock(MockLLM):
 
         mock_model.ainvoke = ainvoke
 
+        # astream() - async version
+        async def astream(messages: Any, *args: Any, **kwargs: Any) -> AsyncIterator[Any]:
+            async for chunk in self._create_async_streaming_response(messages=messages, **kwargs):
+                yield chunk
+
+        mock_model.astream = astream
+
         # Make it work with LCEL's | operator
         mock_model.__or__ = lambda self, other: mock_model
-        mock_model.__ror__ = lambda self, other: MagicMock(invoke=invoke, stream=stream)
+        mock_model.__ror__ = lambda self, other: MagicMock(invoke=invoke, stream=stream, ainvoke=ainvoke, astream=astream)
 
         # bind_tools for function calling
         def bind_tools(tools: list[Any], **kwargs: Any) -> MagicMock:

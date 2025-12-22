@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -59,13 +60,16 @@ class Cassette:
     version: str = "1.0"
     created: float = field(default_factory=time.time)
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
+    def to_dict(self, redact: bool = False) -> dict[str, Any]:
+        data = {
             "name": self.name,
             "version": self.version,
             "created": self.created,
             "interactions": [i.to_dict() for i in self.interactions],
         }
+        if redact:
+            return PIIRedactor.redact_dict(data)
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Cassette:
@@ -80,10 +84,12 @@ class Cassette:
         )
 
     def save(self, path: Path) -> None:
-        """Save cassette to YAML file."""
+        """Save cassette to YAML file with automatic PII redaction."""
         path.parent.mkdir(parents=True, exist_ok=True)
+        # Always redact on save for security
+        data = self.to_dict(redact=True)
         with open(path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
+            yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
 
     @classmethod
     def load(cls, path: Path) -> Cassette:
@@ -91,6 +97,56 @@ class Cassette:
         with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         return cls.from_dict(data)
+
+
+class PIIRedactor:
+    """Class to redact PII (API keys, etc.) from recorded interactions."""
+
+    # Patterns for common API keys and sensitive tokens
+    PATTERNS = [
+        # OpenAI keys: sk-...
+        (re.compile(r"sk-[a-zA-Z0-9]{20,}", re.IGNORECASE), "[REDACTED_OPENAI_KEY]"),
+        # Anthropic keys: ant-api-...
+        (re.compile(r"ant-api-[a-zA-Z0-9\-_]{20,}", re.IGNORECASE), "[REDACTED_ANTHROPIC_KEY]"),
+        # Generic Bearer tokens
+        (re.compile(r"Bearer [a-zA-Z0-9\.\-_]{20,}", re.IGNORECASE), "Bearer [REDACTED]"),
+    ]
+
+    SENSITIVE_KEYS = {
+        "api_key",
+        "api-key",
+        "authorization",
+        "x-api-key",
+        "token",
+        "access_token",
+        "secret",
+        "auth",
+    }
+
+    @classmethod
+    def redact_dict(cls, data: Any) -> Any:
+        """Deeply redact a dictionary or list of any sensitive information."""
+        if isinstance(data, dict):
+            redacted = {}
+            for k, v in data.items():
+                if str(k).lower() in cls.SENSITIVE_KEYS:
+                    redacted[k] = "[REDACTED]"
+                else:
+                    redacted[k] = cls.redact_dict(v)
+            return redacted
+        elif isinstance(data, list):
+            return [cls.redact_dict(item) for item in data]
+        elif isinstance(data, str):
+            return cls.redact_text(data)
+        else:
+            return data
+
+    @classmethod
+    def redact_text(cls, text: str) -> str:
+        """Redact sensitive patterns within a string."""
+        for pattern, replacement in cls.PATTERNS:
+            text = pattern.sub(replacement, text)
+        return text
 
 
 class LLMRecorder:

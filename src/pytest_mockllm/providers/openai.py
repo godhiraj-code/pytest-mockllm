@@ -13,9 +13,9 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from pytest_mockllm.core import MockError, MockLLM, MockResponse
 
@@ -98,7 +98,8 @@ class OpenAIMock(MockLLM):
     def _create_chat_completion(self, **kwargs: Any) -> Any:
         """Create a mock chat completion response."""
         self._record_call(type="chat.completions.create", **kwargs)
-        response = self._get_next_response()
+        model = kwargs.get("model", self._default_model)
+        response = self._get_next_response(model=model)
 
         model = kwargs.get("model", self._default_model)
 
@@ -202,11 +203,39 @@ class OpenAIMock(MockLLM):
         except ImportError:
             return tool_calls
 
+    async def _create_async_chat_completion(self, **kwargs: Any) -> Any:
+        """Create a mock async chat completion response."""
+        self._record_call(type="chat.completions.create", **kwargs)
+        model = kwargs.get("model", self._default_model)
+        response = self._get_next_response(model=model)
+        return self._build_completion_response(response, model)
+
+    async def _create_async_streaming_completion(self, **kwargs: Any) -> AsyncIterator[Any]:
+        """Create an async streaming chat completion response."""
+        self._record_call(type="chat.completions.create", stream=True, **kwargs)
+        model = kwargs.get("model", self._default_model)
+        response = self._get_next_response(model=model)
+
+        if response.stream_chunks:
+            chunks = response.stream_chunks
+        else:
+            words = response.content.split()
+            chunks = [word + " " for word in words[:-1]] + [words[-1]] if words else [""]
+
+        for i, chunk_content in enumerate(chunks):
+            yield self._build_stream_chunk(
+                chunk_content,
+                model=model,
+                is_first=(i == 0),
+                is_last=(i == len(chunks) - 1),
+                response_id=response.id,
+            )
+
     def _create_streaming_completion(self, **kwargs: Any) -> Iterator[Any]:
         """Create a streaming chat completion response."""
         self._record_call(type="chat.completions.create", stream=True, **kwargs)
-        response = self._get_next_response()
         model = kwargs.get("model", self._default_model)
+        response = self._get_next_response(model=model)
 
         # Split content into chunks
         if response.stream_chunks:
@@ -310,19 +339,32 @@ class OpenAIMock(MockLLM):
 
     def __enter__(self) -> OpenAIMock:
         """Start mocking OpenAI API calls."""
-        # Create the mock client
+        # Create the sync mock client
         mock_client = MagicMock()
 
-        # Set up chat completions
         def create_chat(*args: Any, **kwargs: Any) -> Any:
             if kwargs.get("stream", False):
                 return self._create_streaming_completion(**kwargs)
             return self._create_chat_completion(**kwargs)
 
         mock_client.chat.completions.create = create_chat
-
-        # Set up embeddings
         mock_client.embeddings.create = lambda **kw: self._create_embedding(**kw)
+
+        # Create the async mock client
+        async_mock_client = MagicMock()
+
+        async def create_async_chat(*args: Any, **kwargs: Any) -> Any:
+            if kwargs.get("stream", False):
+                return self._create_async_streaming_completion(**kwargs)
+            return await self._create_async_chat_completion(**kwargs)
+
+        # Using MagicMock but with async function assignments
+        async_mock_client.chat.completions.create = create_async_chat
+        
+        async def create_async_embedding(**kw: Any) -> Any:
+            return self._create_embedding(**kw)
+            
+        async_mock_client.embeddings.create = create_async_embedding
 
         # Patch the OpenAI client
         try:
@@ -331,7 +373,7 @@ class OpenAIMock(MockLLM):
             patcher.start()
 
             # Also patch AsyncOpenAI
-            async_patcher = patch("openai.AsyncOpenAI", return_value=mock_client)
+            async_patcher = patch("openai.AsyncOpenAI", return_value=async_mock_client)
             self._patches.append(async_patcher)
             async_patcher.start()
         except Exception:
@@ -339,6 +381,7 @@ class OpenAIMock(MockLLM):
             pass
 
         self._mock_client = mock_client
+        self._async_mock_client = async_mock_client
         return self
 
     @property

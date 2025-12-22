@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
@@ -51,6 +51,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -e ".[all,dev]"
           pip install ruff mypy types-PyYAML
 
       - name: Run Ruff
@@ -88,6 +89,9 @@ jobs:
     needs: [test, lint, build]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      id-token: write  # Required for trusted publishing
+      contents: read
     
     steps:
       - uses: actions/download-artifact@v4
@@ -97,5 +101,7 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+        # No password needed if Trusted Publishing is configured in PyPI
+        # If using API token, uncomment the password line below
+        # with:
+        #   password: ${{ secrets.PYPI_API_TOKEN }}

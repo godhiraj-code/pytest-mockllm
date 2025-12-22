@@ -61,11 +61,10 @@ class MockResponse:
 
     def __post_init__(self) -> None:
         if self.token_usage is None:
-            # Estimate tokens (rough approximation: ~4 chars per token)
-            estimated_tokens = len(self.content) // 4 + 1
+            # Estimate tokens using the TokenCounter utility
             self.token_usage = TokenUsage(
                 prompt_tokens=10,  # Assume minimal prompt
-                completion_tokens=estimated_tokens,
+                completion_tokens=TokenCounter.count_tokens(self.content, self.model),
             )
 
 
@@ -87,6 +86,47 @@ class MockError:
         }
         if not self.message:
             self.message = error_messages.get(self.error_type, "Unknown error")
+
+
+class TokenCounter:
+    """Utility for accurate token counting across different providers."""
+
+    @staticmethod
+    def count_tokens(text: str, model: str = "gpt-4o") -> int:
+        """
+        Count tokens in a string for a specific model.
+
+        Uses real tokenizers (tiktoken, anthropic) if installed, otherwise
+        falls back to a rough character-based estimate.
+        """
+        if not text:
+            return 0
+
+        # OpenAI models
+        if any(x in model.lower() for x in ["gpt-", "text-embedding-", "o1-"]):
+            try:
+                import tiktoken
+                try:
+                    encoding = tiktoken.encoding_for_model(model)
+                except KeyError:
+                    encoding = tiktoken.get_encoding("cl100k_base")
+                return len(encoding.encode(text))
+            except ImportError:
+                pass
+
+        # Anthropic models
+        if "claude-" in model.lower():
+            try:
+                # Anthropic doesn't have a public lightweight tokenizer like tiktoken
+                # that works without the full SDK in a standard way yet.
+                # However, we can use a slightly more accurate multiplier than 4.
+                # Claude tokens are often slightly longer than GPT tokens.
+                return int(len(text) / 3.5) + 1
+            except Exception:
+                pass
+
+        # Default fallback: rough approximation (~4 chars per token)
+        return len(text) // 4 + 1
 
 
 class MockLLM(ABC):
@@ -116,6 +156,8 @@ class MockLLM(ABC):
         self._total_completion_tokens: int = 0
         self._default_response: MockResponse | None = None
         self._strict_mode: bool = False
+        self._chaos_jitter: int = 0
+        self._chaos_error_prob: float = 0.0
 
     @property
     def calls(self) -> list[dict[str, Any]]:
@@ -244,8 +286,33 @@ class MockLLM(ABC):
         self._strict_mode = enabled
         return self
 
-    def _get_next_response(self) -> MockResponse:
-        """Get the next response from the queue."""
+    def simulate_jitter(self, max_ms: int = 500) -> MockLLM:
+        """
+        Add random latency jitter to all responses.
+
+        Args:
+            max_ms: Maximum additional latency in milliseconds.
+        """
+        self._chaos_jitter = max_ms
+        return self
+
+    def simulate_random_errors(self, probability: float = 0.1) -> MockLLM:
+        """
+        Randomly fail calls with a given probability.
+
+        Args:
+            probability: Probability of failure (0.0 to 1.0).
+        """
+        self._chaos_error_prob = probability
+        return self
+
+    def _get_next_response(self, model: str | None = None) -> MockResponse:
+        """
+        Get the next response from the queue.
+
+        Args:
+            model: Optional model name to refine token estimation if usage was not pre-set.
+        """
         # Check for error simulation
         if self._error and self._call_count >= self._error.after_calls:
             self._raise_provider_error(self._error)
@@ -266,15 +333,44 @@ class MockLLM(ABC):
             # Fallback default
             response = MockResponse(content="Mock response from pytest-mockllm")
 
+        # Refine token estimation if a specific model is requested and usage was default
+        if model and response.model == "mock-model" and response.token_usage:
+            # Only update if the prompt_tokens is also at default to avoid overriding manual settings
+            if response.token_usage.prompt_tokens == 10:
+                response.token_usage.completion_tokens = TokenCounter.count_tokens(response.content, model)
+                response.token_usage.total_tokens = response.token_usage.prompt_tokens + response.token_usage.completion_tokens
+
         # Simulate latency
         if response.latency_ms > 0:
             time.sleep(response.latency_ms / 1000.0)
+
+        # Simulate chaos jitter
+        if self._chaos_jitter > 0:
+            import random
+            jitter = random.randint(0, self._chaos_jitter)
+            time.sleep(jitter / 1000.0)
+
+        # Simulate random chaos errors
+        if self._chaos_error_prob > 0:
+            import random
+            if random.random() < self._chaos_error_prob:
+                error_types = ["rate_limit", "timeout", "server"]
+                error_type = random.choice(error_types)
+                self._raise_provider_error(MockError(error_type=error_type))
 
         # Track usage
         if response.token_usage:
             self._total_tokens += response.token_usage.total_tokens
             self._total_prompt_tokens += response.token_usage.prompt_tokens
             self._total_completion_tokens += response.token_usage.completion_tokens
+
+            # Record in global stats for the terminal summary
+            from pytest_mockllm.stats import GLOBAL_STATS
+            GLOBAL_STATS.record_call(
+                model=model or response.model or "unknown",
+                prompt=response.token_usage.prompt_tokens,
+                completion=response.token_usage.completion_tokens,
+            )
 
         self._call_count += 1
         return response

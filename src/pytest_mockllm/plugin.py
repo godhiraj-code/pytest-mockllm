@@ -66,6 +66,49 @@ def pytest_configure(config: Config) -> None:
     )
 
 
+def pytest_sessionstart(session: Any) -> None:
+    """Initialize global statistics."""
+    from pytest_mockllm.stats import GLOBAL_STATS
+    GLOBAL_STATS.reset()
+
+
+def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: Any) -> None:
+    """Display LLM usage and cost savings summary."""
+    from pytest_mockllm.stats import GLOBAL_STATS
+
+    if GLOBAL_STATS.total_calls == 0:
+        return
+
+    terminalreporter.section("pytest-mockllm stats")
+    
+    # Header
+    terminalreporter.write_line(
+        f"{'Model':<30} {'Calls':<8} {'Prompt':<10} {'Completion':<12} {'Total':<10}"
+    )
+    terminalreporter.write_line("-" * 75)
+
+    # Detailed rows (sorted by calls)
+    sorted_models = sorted(GLOBAL_STATS.model_counts.items(), key=lambda x: x[1], reverse=True)
+    for model, count in sorted_models:
+        # Note: We don't currently track per-model tokens in GLOBAL_STATS easily,
+        # but we can improve GLOBAL_STATS later. For now, show what we have.
+        terminalreporter.write_line(f"{model:<30} {count:<8}")
+
+    terminalreporter.write_line("-" * 75)
+    terminalreporter.write_line(
+        f"{'TOTAL':<30} {GLOBAL_STATS.total_calls:<8} "
+        f"{GLOBAL_STATS.total_prompt_tokens:<10} "
+        f"{GLOBAL_STATS.total_completion_tokens:<12} "
+        f"{GLOBAL_STATS.total_prompt_tokens + GLOBAL_STATS.total_completion_tokens:<10}"
+    )
+    
+    # The HERO metric: Cost Saved
+    cost_str = f"${GLOBAL_STATS.total_cost_saved:,.4f}"
+    terminalreporter.write_line("")
+    terminalreporter.write_sep("=", f" 💎 Total Estimated Cost Saved: {cost_str} 💎 ", bold=True, blue=True)
+    terminalreporter.write_line("")
+
+
 # Export fixtures for pytest discovery
 __all__ = [
     "mock_llm",

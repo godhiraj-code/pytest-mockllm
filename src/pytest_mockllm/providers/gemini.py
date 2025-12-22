@@ -9,7 +9,7 @@ Provides comprehensive mocking for the Google GenerativeAI SDK including:
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -61,7 +61,8 @@ class GeminiMock(MockLLM):
     def _create_generation(self, **kwargs: Any) -> Any:
         """Create a mock content generation response."""
         self._record_call(type="generate_content", **kwargs)
-        response = self._get_next_response()
+        model = kwargs.get("model", self._default_model)
+        response = self._get_next_response(model=model)
 
         return self._build_generation_response(response)
 
@@ -122,10 +123,35 @@ class GeminiMock(MockLLM):
 
         return mock
 
+    async def _create_async_generation(self, **kwargs: Any) -> Any:
+        """Create a mock async content generation response."""
+        self._record_call(type="generate_content", **kwargs)
+        model = kwargs.get("model", self._default_model)
+        response = self._get_next_response(model=model)
+        return self._build_generation_response(response)
+
+    async def _create_async_streaming_generation(self, **kwargs: Any) -> AsyncIterator[Any]:
+        """Create an async streaming content generation response."""
+        self._record_call(type="generate_content", stream=True, **kwargs)
+        model = kwargs.get("model", self._default_model)
+        response = self._get_next_response(model=model)
+
+        # Split content into chunks
+        if response.stream_chunks:
+            chunks = response.stream_chunks
+        else:
+            words = response.content.split()
+            chunks = [word + " " for word in words[:-1]] + [words[-1]] if words else [""]
+
+        for i, chunk_content in enumerate(chunks):
+            is_last = (i == len(chunks) - 1)
+            yield self._build_stream_chunk(chunk_content, is_last, response)
+
     def _create_streaming_generation(self, **kwargs: Any) -> Iterator[Any]:
         """Create a streaming content generation response."""
         self._record_call(type="generate_content", stream=True, **kwargs)
-        response = self._get_next_response()
+        model = kwargs.get("model", self._default_model)
+        response = self._get_next_response(model=model)
 
         # Split content into chunks
         if response.stream_chunks:
@@ -184,9 +210,27 @@ class GeminiMock(MockLLM):
                     return self._create_streaming_generation(**kw)
                 return self._create_generation(**kw)
 
+            async def generate_content_async(*args: Any, **kw: Any) -> Any:
+                if kw.get("stream", False):
+                    return self._create_async_streaming_generation(**kw)
+                return await self._create_async_generation(**kw)
+
             model.generate_content = generate_content
+            model.generate_content_async = generate_content_async
             model.start_chat = lambda **kw: self._create_chat_session()
+            
+            async def start_chat_async(**kw: Any) -> Any:
+                # Chat sessions in Gemini are mostly local state management
+                # but we'll provide an async variant if needed
+                return self._create_chat_session()
+                
+            model.start_chat_async = start_chat_async
             model.count_tokens = lambda content: MagicMock(total_tokens=len(str(content).split()) * 1.3)
+            
+            async def count_tokens_async(content: Any) -> Any:
+                return MagicMock(total_tokens=len(str(content).split()) * 1.3)
+                
+            model.count_tokens_async = count_tokens_async
 
             return model
 

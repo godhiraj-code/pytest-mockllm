@@ -10,7 +10,7 @@ Provides comprehensive mocking for the Anthropic Python SDK including:
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -86,9 +86,8 @@ class AnthropicMock(MockLLM):
     def _create_message(self, **kwargs: Any) -> Any:
         """Create a mock message response."""
         self._record_call(type="messages.create", **kwargs)
-        response = self._get_next_response()
-
         model = kwargs.get("model", self._default_model)
+        response = self._get_next_response(model=model)
         return self._build_message_response(response, model)
 
     def _build_message_response(self, response: MockResponse, model: str) -> Any:
@@ -163,11 +162,70 @@ class AnthropicMock(MockLLM):
 
         return mock
 
+    async def _create_async_message(self, **kwargs: Any) -> Any:
+        """Create a mock async message response."""
+        self._record_call(type="messages.create", **kwargs)
+        model = kwargs.get("model", self._default_model)
+        response = self._get_next_response(model=model)
+        return self._build_message_response(response, model)
+
+    async def _create_async_streaming_message(self, **kwargs: Any) -> AsyncIterator[Any]:
+        """Create an async streaming message response."""
+        self._record_call(type="messages.create", stream=True, **kwargs)
+        model = kwargs.get("model", self._default_model)
+        response = self._get_next_response(model=model)
+
+        # Split content into chunks
+        if response.stream_chunks:
+            chunks = response.stream_chunks
+        else:
+            words = response.content.split()
+            chunks = [word + " " for word in words[:-1]] + [words[-1]] if words else [""]
+
+        # Emit message_start
+        yield self._build_stream_event("message_start", {
+            "message": {
+                "id": response.id,
+                "type": "message",
+                "role": "assistant",
+                "content": [],
+                "model": model,
+                "stop_reason": None,
+                "stop_sequence": None,
+                "usage": {"input_tokens": response.token_usage.prompt_tokens if response.token_usage else 10, "output_tokens": 0},
+            }
+        })
+
+        # Emit content_block_start
+        yield self._build_stream_event("content_block_start", {
+            "index": 0,
+            "content_block": {"type": "text", "text": ""},
+        })
+
+        # Emit content_block_delta for each chunk
+        for chunk_content in chunks:
+            yield self._build_stream_event("content_block_delta", {
+                "index": 0,
+                "delta": {"type": "text_delta", "text": chunk_content},
+            })
+
+        # Emit content_block_stop
+        yield self._build_stream_event("content_block_stop", {"index": 0})
+
+        # Emit message_delta
+        yield self._build_stream_event("message_delta", {
+            "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+            "usage": {"output_tokens": response.token_usage.completion_tokens if response.token_usage else 50},
+        })
+
+        # Emit message_stop
+        yield self._build_stream_event("message_stop", {})
+
     def _create_streaming_message(self, **kwargs: Any) -> Iterator[Any]:
         """Create a streaming message response."""
         self._record_call(type="messages.create", stream=True, **kwargs)
-        response = self._get_next_response()
         model = kwargs.get("model", self._default_model)
+        response = self._get_next_response(model=model)
 
         # Split content into chunks
         if response.stream_chunks:
@@ -226,6 +284,7 @@ class AnthropicMock(MockLLM):
 
     def __enter__(self) -> AnthropicMock:
         """Start mocking Anthropic API calls."""
+        # Sync client
         mock_client = MagicMock()
 
         def create_message(*args: Any, **kwargs: Any) -> Any:
@@ -234,23 +293,34 @@ class AnthropicMock(MockLLM):
             return self._create_message(**kwargs)
 
         mock_client.messages.create = create_message
-
-        # Also support the beta API patterns
         mock_client.beta = MagicMock()
         mock_client.beta.messages = mock_client.messages
+
+        # Async client
+        async_mock_client = MagicMock()
+
+        async def create_async_message(*args: Any, **kwargs: Any) -> Any:
+            if kwargs.get("stream", False):
+                return self._create_async_streaming_message(**kwargs)
+            return await self._create_async_message(**kwargs)
+
+        async_mock_client.messages.create = create_async_message
+        async_mock_client.beta = MagicMock()
+        async_mock_client.beta.messages = async_mock_client.messages
 
         try:
             patcher = patch("anthropic.Anthropic", return_value=mock_client)
             self._patches.append(patcher)
             patcher.start()
 
-            async_patcher = patch("anthropic.AsyncAnthropic", return_value=mock_client)
+            async_patcher = patch("anthropic.AsyncAnthropic", return_value=async_mock_client)
             self._patches.append(async_patcher)
             async_patcher.start()
         except Exception:
             pass
 
         self._mock_client = mock_client
+        self._async_mock_client = async_mock_client
         return self
 
     @property

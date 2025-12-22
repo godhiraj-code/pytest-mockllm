@@ -123,3 +123,6 @@ tests/llm_cassettes/
 # OS
 .DS_Store
 Thumbs.db
+
+# Test logs
+*.txt

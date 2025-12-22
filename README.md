@@ -102,14 +102,17 @@ Native integration with popular LLM frameworks.
 ### 📼 Response Recording
 VCR-style recording for golden tests.
 
-### 💰 Cost & Token Tracking
-Assert on costs before they become production surprises.
+### ⚡ Chaos Engineering
+Simulate rate limits, timeouts, and random latency jitter to test your app's resilience.
 
-### ⚡ Chaos Testing
-Simulate rate limits, timeouts, and API errors.
+### 💰 Cost & Token Tracking
+Professional-grade token counting with `tiktoken` and built-in cost dashboard.
+
+### 📼 Secure Recording
+VCR-style recording with automatic PII redaction (API keys, Bearer tokens).
 
 ### 🔒 Type Safe
-Full type hints and mypy compliance.
+Full type hints and objects that match SDK structures perfectly.
 
 ---
 
@@ -290,20 +293,18 @@ def test_handles_rate_limit(mock_openai):
     mock_openai.simulate_error("rate_limit", after_calls=2)
     mock_openai.add_responses("OK", "OK")
     
-    # First two calls succeed
-    assert my_function() == "OK"
-    assert my_function() == "OK"
-    
-    # Third call hits rate limit  
-    with pytest.raises(Exception):
-        my_function()
+    # First two calls succeed, third fails
+    # ...
 
-def test_handles_timeout():
-    mock_openai.simulate_error("timeout")
-    
-    # Should trigger your retry logic
-    with pytest.raises(TimeoutError):
-        my_function()
+def test_handles_jitter(mock_openai):
+    # Add up to 500ms random latency to every call
+    mock_openai.simulate_jitter(max_ms=500)
+    # ...
+
+def test_random_failures(mock_openai):
+    # 10% chance of random "server" or "rate_limit" error
+    mock_openai.simulate_random_errors(probability=0.1)
+    # ...
 ```
 
 ### Strict Mode
@@ -429,26 +430,26 @@ llm_strict = true
 |---------|---------------|---------------|-----------|-------|
 | Zero config | ✅ | ❌ | ❌ | ❌ |
 | pytest fixtures | ✅ | ❌ | ✅ | ✅ |
-| OpenAI support | ✅ Native | 🟡 Manual | ❌ | 🟡 HTTP |
-| Anthropic support | ✅ Native | 🟡 Manual | ❌ | 🟡 HTTP |
+| Async support | ✅ True Async | 🟡 Complex | ❌ | 🟡 HTTP |
+| OpenAI/Anthropic | ✅ Native | 🟡 Manual | ❌ | 🟡 HTTP |
 | Gemini support | ✅ Native | 🟡 Manual | ❌ | 🟡 HTTP |
-| LangChain support | ✅ Native | 🟡 Complex | ❌ | 🟡 LimitedComplex |
-| Streaming | ✅ | 🟡 Manual | ❌ | 🟡 Complex |
-| Token tracking | ✅ | ❌ | ❌ | ❌ |
-| Cost estimation | ✅ | ❌ | ❌ | ❌ |
-| Recording/Replay | ✅ | ❌ | ❌ | ✅ |
-| Error simulation | ✅ | 🟡 Manual | 🟡 HTTP | ❌ |
+| Token counting | ✅ tiktoken | ❌ | ❌ | ❌ |
+| Cost Dashboard | ✅ | ❌ | ❌ | ❌ |
+| Recording/Replay | ✅ Redacted | ❌ | ❌ | ✅ |
+| Chaos Engineering| ✅ Jitter/Error| 🟡 Manual | 🟡 HTTP | ❌ |
 
 ---
 
 ## 🛣️ Roadmap
 
-- [ ] Async/await support improvements
-- [ ] More providers (Cohere, Mistral, Together AI)
+- [x] True Async/await support
+- [x] Professional Tokenizers (tiktoken)
+- [x] Terminal Cost Dashboard
+- [x] Chaos Engineering (Jitter)
+- [x] Secure Recording (PII Redaction)
+- [ ] More providers (Cohere, Mistral)
 - [ ] pytest-xdist compatibility
-- [ ] Response fuzzing for robustness testing
-- [ ] Integration with LangSmith for debugging
-- [ ] Automatic prompt regression detection
+- [ ] Integration with LangSmith
 
 ---
 

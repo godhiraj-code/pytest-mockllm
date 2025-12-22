@@ -23,7 +23,7 @@ from pytest_mockllm.providers.gemini import GeminiMock
 from pytest_mockllm.providers.openai import OpenAIMock
 from pytest_mockllm.recording import LLMRecorder
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __all__ = [
     # Core
     "MockLLM",

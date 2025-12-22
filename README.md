@@ -116,6 +116,17 @@ Full type hints and objects that match SDK structures perfectly.
 
 ---
 
+## 🆕 What's New in v0.2.1
+
+This major release transforms `pytest-mockllm` into a professional-grade tool:
+- 🚀 **True Async Support**: Real coroutines and async iterators for all providers.
+- 🎯 **Accurate Tokenizers**: High-fidelity counting with `tiktoken`.
+- 📊 **Cost Saved Dashboard**: Live ROI tracking in your terminal.
+- ⚡ **Chaos Engineering**: Proactive resilience testing with jitter and error simulation.
+- 🐍 **Next-Gen Support**: Verified compatibility with **Python 3.14**.
+
+---
+
 ## 🤖 Providers
 
 ### OpenAI

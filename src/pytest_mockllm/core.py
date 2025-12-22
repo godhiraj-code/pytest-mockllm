@@ -11,18 +11,17 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Iterator, Optional, Union
-from unittest.mock import MagicMock, patch
+from typing import Any
 
 
 @dataclass
 class TokenUsage:
     """Token usage statistics for a mock response."""
-    
+
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
-    
+
     def __post_init__(self) -> None:
         if self.total_tokens == 0:
             self.total_tokens = self.prompt_tokens + self.completion_tokens
@@ -32,10 +31,10 @@ class TokenUsage:
 class MockResponse:
     """
     A configurable mock response for LLM APIs.
-    
+
     This provides a provider-agnostic way to define responses that
     will be converted to the appropriate format for each provider.
-    
+
     Examples:
         >>> response = MockResponse(content="Hello, world!")
         >>> response = MockResponse(
@@ -44,22 +43,22 @@ class MockResponse:
         ...     latency_ms=100,
         ... )
     """
-    
+
     content: str
     role: str = "assistant"
     model: str = "mock-model"
-    token_usage: Optional[TokenUsage] = None
+    token_usage: TokenUsage | None = None
     finish_reason: str = "stop"
     latency_ms: int = 0
     id: str = field(default_factory=lambda: f"mock-{uuid.uuid4().hex[:8]}")
-    
+
     # For streaming responses
-    stream_chunks: Optional[list[str]] = None
-    
+    stream_chunks: list[str] | None = None
+
     # For function/tool calling
-    tool_calls: Optional[list[dict[str, Any]]] = None
-    function_call: Optional[dict[str, Any]] = None
-    
+    tool_calls: list[dict[str, Any]] | None = None
+    function_call: dict[str, Any] | None = None
+
     def __post_init__(self) -> None:
         if self.token_usage is None:
             # Estimate tokens (rough approximation: ~4 chars per token)
@@ -70,14 +69,14 @@ class MockResponse:
             )
 
 
-@dataclass 
+@dataclass
 class MockError:
     """Configuration for simulating API errors."""
-    
+
     error_type: str  # "rate_limit", "timeout", "auth", "server", "invalid_request"
     message: str = ""
     after_calls: int = 0  # Trigger after N successful calls (0 = immediate)
-    
+
     def __post_init__(self) -> None:
         error_messages = {
             "rate_limit": "Rate limit exceeded. Please retry after 60 seconds.",
@@ -93,10 +92,10 @@ class MockError:
 class MockLLM(ABC):
     """
     Abstract base class for LLM mocks.
-    
+
     All provider-specific mocks (OpenAI, Anthropic, etc.) inherit from this
     class to ensure a consistent API.
-    
+
     Features:
         - Response queue management
         - Call history tracking
@@ -104,66 +103,66 @@ class MockLLM(ABC):
         - Error simulation
         - Latency simulation
     """
-    
+
     def __init__(self) -> None:
         self._responses: list[MockResponse] = []
         self._response_index: int = 0
         self._calls: list[dict[str, Any]] = []
         self._patches: list[Any] = []
-        self._error: Optional[MockError] = None
+        self._error: MockError | None = None
         self._call_count: int = 0
         self._total_tokens: int = 0
         self._total_prompt_tokens: int = 0
         self._total_completion_tokens: int = 0
-        self._default_response: Optional[MockResponse] = None
+        self._default_response: MockResponse | None = None
         self._strict_mode: bool = False
-    
+
     @property
     def calls(self) -> list[dict[str, Any]]:
         """All recorded API calls made to this mock."""
         return self._calls
-    
+
     @property
     def call_count(self) -> int:
         """Number of API calls made to this mock."""
         return self._call_count
-    
+
     @property
-    def last_call(self) -> Optional[dict[str, Any]]:
+    def last_call(self) -> dict[str, Any] | None:
         """The most recent API call, or None if no calls made."""
         return self._calls[-1] if self._calls else None
-    
+
     @property
     def total_tokens(self) -> int:
         """Total tokens used across all calls."""
         return self._total_tokens
-    
+
     @property
     def total_prompt_tokens(self) -> int:
         """Total prompt tokens used across all calls."""
         return self._total_prompt_tokens
-    
+
     @property
     def total_completion_tokens(self) -> int:
         """Total completion tokens used across all calls."""
         return self._total_completion_tokens
-    
+
     def add_response(
         self,
         content: str,
         *,
         model: str = "mock-model",
-        token_usage: Optional[TokenUsage] = None,
+        token_usage: TokenUsage | None = None,
         latency_ms: int = 0,
-        tool_calls: Optional[list[dict[str, Any]]] = None,
-        stream_chunks: Optional[list[str]] = None,
-    ) -> "MockLLM":
+        tool_calls: list[dict[str, Any]] | None = None,
+        stream_chunks: list[str] | None = None,
+    ) -> MockLLM:
         """
         Add a response to the queue.
-        
+
         Responses are returned in order. When exhausted, returns default response
         or raises an error in strict mode.
-        
+
         Args:
             content: The response content/message
             model: Model name to include in response
@@ -171,10 +170,10 @@ class MockLLM(ABC):
             latency_ms: Simulated latency in milliseconds
             tool_calls: Tool/function calls to include
             stream_chunks: For streaming, custom chunk splits
-            
+
         Returns:
             self for method chaining
-            
+
         Example:
             >>> mock.add_response("First response").add_response("Second response")
         """
@@ -188,43 +187,43 @@ class MockLLM(ABC):
         )
         self._responses.append(response)
         return self
-    
-    def add_responses(self, *contents: str) -> "MockLLM":
+
+    def add_responses(self, *contents: str) -> MockLLM:
         """
         Add multiple simple text responses at once.
-        
+
         Example:
             >>> mock.add_responses("Hello!", "How can I help?", "Goodbye!")
         """
         for content in contents:
             self.add_response(content)
         return self
-    
-    def set_default_response(self, content: str, **kwargs: Any) -> "MockLLM":
+
+    def set_default_response(self, content: str, **kwargs: Any) -> MockLLM:
         """
         Set a default response when the queue is exhausted.
-        
+
         This response will be returned for all calls after the queue is empty,
         unless strict mode is enabled.
         """
         self._default_response = MockResponse(content=content, **kwargs)
         return self
-    
+
     def simulate_error(
         self,
         error_type: str,
         *,
         message: str = "",
         after_calls: int = 0,
-    ) -> "MockLLM":
+    ) -> MockLLM:
         """
         Configure the mock to simulate an API error.
-        
+
         Args:
             error_type: One of "rate_limit", "timeout", "auth", "server", "invalid_request"
             message: Custom error message (uses default if not provided)
             after_calls: Number of successful calls before error (0 = immediate)
-            
+
         Example:
             >>> mock.simulate_error("rate_limit", after_calls=5)
         """
@@ -234,23 +233,23 @@ class MockLLM(ABC):
             after_calls=after_calls,
         )
         return self
-    
-    def set_strict_mode(self, enabled: bool = True) -> "MockLLM":
+
+    def set_strict_mode(self, enabled: bool = True) -> MockLLM:
         """
         Enable strict mode - raises error if no response configured.
-        
+
         In strict mode, tests fail immediately if an unconfigured LLM call is made,
         helping catch missing mock configurations.
         """
         self._strict_mode = enabled
         return self
-    
+
     def _get_next_response(self) -> MockResponse:
         """Get the next response from the queue."""
         # Check for error simulation
         if self._error and self._call_count >= self._error.after_calls:
             self._raise_provider_error(self._error)
-        
+
         # Try to get from queue
         if self._response_index < len(self._responses):
             response = self._responses[self._response_index]
@@ -266,20 +265,20 @@ class MockLLM(ABC):
         else:
             # Fallback default
             response = MockResponse(content="Mock response from pytest-mockllm")
-        
+
         # Simulate latency
         if response.latency_ms > 0:
             time.sleep(response.latency_ms / 1000.0)
-        
+
         # Track usage
         if response.token_usage:
             self._total_tokens += response.token_usage.total_tokens
             self._total_prompt_tokens += response.token_usage.prompt_tokens
             self._total_completion_tokens += response.token_usage.completion_tokens
-        
+
         self._call_count += 1
         return response
-    
+
     def _record_call(self, **kwargs: Any) -> None:
         """Record an API call for later inspection."""
         self._calls.append({
@@ -287,23 +286,23 @@ class MockLLM(ABC):
             "timestamp": time.time(),
             **kwargs,
         })
-    
+
     @abstractmethod
     def _raise_provider_error(self, error: MockError) -> None:
         """Raise a provider-specific error. Must be implemented by subclasses."""
         pass
-    
+
     @abstractmethod
-    def __enter__(self) -> "MockLLM":
+    def __enter__(self) -> MockLLM:
         """Start mocking. Must be implemented by subclasses."""
         pass
-    
+
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Stop mocking and restore original behavior."""
         for p in reversed(self._patches):
             p.stop()
         self._patches.clear()
-    
+
     def reset(self) -> None:
         """Reset the mock state (calls, responses, counters)."""
         self._responses.clear()
@@ -343,12 +342,12 @@ def estimate_cost(
 ) -> float:
     """
     Estimate the cost in USD for a given model and token counts.
-    
+
     Args:
         model: Model name (e.g., "gpt-4o", "claude-3-5-sonnet-20241022")
         prompt_tokens: Number of input/prompt tokens
         completion_tokens: Number of output/completion tokens
-        
+
     Returns:
         Estimated cost in USD
     """

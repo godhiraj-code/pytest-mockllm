@@ -1,19 +1,15 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/godhiraj-code/pytest-mockllm/main/docs/logo.png" alt="pytest-mockllm logo" width="200">
-</p>
-
-<h1 align="center">pytest-mockllm</h1>
+<h1 align="center">🧪 pytest-mockllm</h1>
 
 <p align="center">
   <strong>🚀 Zero-config LLM mocking for pytest — Test AI apps without the AI bills</strong>
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/pytest-mockllm/"><img src="https://img.shields.io/pypi/v/pytest-mockllm.svg" alt="PyPI version"></a>
-  <a href="https://pypi.org/project/pytest-mockllm/"><img src="https://img.shields.io/pypi/pyversions/pytest-mockllm.svg" alt="Python versions"></a>
-  <a href="https://github.com/godhiraj-code/pytest-mockllm/actions"><img src="https://github.com/godhiraj-code/pytest-mockllm/workflows/CI/badge.svg" alt="CI"></a>
-  <a href="https://codecov.io/gh/godhiraj-code/pytest-mockllm"><img src="https://codecov.io/gh/godhiraj-code/pytest-mockllm/branch/main/graph/badge.svg" alt="Coverage"></a>
+  <a href="https://pypi.org/project/pytest-mockllm/"><img src="https://img.shields.io/pypi/v/pytest-mockllm?color=blue" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/pytest-mockllm/"><img src="https://img.shields.io/pypi/pyversions/pytest-mockllm" alt="Python versions"></a>
+  <a href="https://github.com/godhiraj-code/pytest-mockllm/actions"><img src="https://github.com/godhiraj-code/pytest-mockllm/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/godhiraj-code/pytest-mockllm/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+  <a href="https://pepy.tech/project/pytest-mockllm"><img src="https://static.pepy.tech/badge/pytest-mockllm" alt="Downloads"></a>
 </p>
 
 <p align="center">

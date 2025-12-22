@@ -1,0 +1,119 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pytest-mockllm"
+version = "0.1.0"
+description = "🚀 Zero-config pytest plugin for mocking LLM APIs - OpenAI, Anthropic, Gemini, LangChain & more"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    { name = "Dhiraj Das", email = "dhirajdas.666@gmail.com" }
+]
+keywords = [
+    # Core testing
+    "pytest", "pytest-plugin", "mock", "mocking", "testing", "unit-testing",
+    # LLM providers
+    "llm", "openai", "anthropic", "gemini", "claude", "gpt-4", "gpt-4o", "chatgpt",
+    # Frameworks
+    "langchain", "llamaindex", "llama-index",
+    # Use cases
+    "ai", "artificial-intelligence", "machine-learning", "nlp",
+    # Testing specific
+    "test-fixtures", "test-automation", "api-mocking"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Pytest",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Testing :: Mocking",
+    "Topic :: Software Development :: Testing :: Unit",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+dependencies = [
+    "pytest>=7.0.0",
+]
+
+[project.optional-dependencies]
+openai = ["openai>=1.0.0"]
+anthropic = ["anthropic>=0.18.0"]
+google = ["google-generativeai>=0.3.0"]
+langchain = ["langchain-core>=0.1.0"]
+all = [
+    "openai>=1.0.0",
+    "anthropic>=0.18.0",
+    "google-generativeai>=0.3.0",
+    "langchain-core>=0.1.0",
+]
+dev = [
+    "pytest-cov>=4.0.0",
+    "mypy>=1.0.0",
+    "ruff>=0.1.0",
+    "pre-commit>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://www.dhirajdas.dev"
+Documentation = "https://github.com/godhiraj-code/pytest-mockllm#readme"
+Repository = "https://github.com/godhiraj-code/pytest-mockllm"
+Issues = "https://github.com/godhiraj-code/pytest-mockllm/issues"
+Changelog = "https://github.com/godhiraj-code/pytest-mockllm/blob/main/CHANGELOG.md"
+
+[project.entry-points.pytest11]
+mockllm = "pytest_mockllm.plugin"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pytest_mockllm"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+strict = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "PT"]
+ignore = ["E501"]
+
+[tool.coverage.run]
+source = ["src/pytest_mockllm"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]

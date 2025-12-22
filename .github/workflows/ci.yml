@@ -51,13 +51,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff mypy
+          pip install ruff mypy types-PyYAML
 
       - name: Run Ruff
         run: ruff check src/
 
       - name: Run MyPy
-        run: mypy src/ --ignore-missing-imports
+        run: mypy src/pytest_mockllm --ignore-missing-imports
 
   build:
     runs-on: ubuntu-latest

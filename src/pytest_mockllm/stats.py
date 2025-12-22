@@ -3,8 +3,11 @@ Global statistics tracker for pytest-mockllm.
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
+
 from pytest_mockllm.core import estimate_cost
+
 
 @dataclass
 class UsageStats:
@@ -19,7 +22,7 @@ class UsageStats:
         self.total_prompt_tokens += prompt
         self.total_completion_tokens += completion
         self.total_cost_saved += estimate_cost(model, prompt, completion)
-        
+
         self.model_counts[model] = self.model_counts.get(model, 0) + 1
 
     def reset(self) -> None:

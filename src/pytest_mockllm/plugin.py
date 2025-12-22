@@ -7,7 +7,7 @@ It registers all fixtures and configuration options.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pytest_mockllm.fixtures import (
     llm_recorder,
@@ -80,7 +80,7 @@ def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: Any)
         return
 
     terminalreporter.section("pytest-mockllm stats")
-    
+
     # Header
     terminalreporter.write_line(
         f"{'Model':<30} {'Calls':<8} {'Prompt':<10} {'Completion':<12} {'Total':<10}"
@@ -101,7 +101,7 @@ def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: Any)
         f"{GLOBAL_STATS.total_completion_tokens:<12} "
         f"{GLOBAL_STATS.total_prompt_tokens + GLOBAL_STATS.total_completion_tokens:<10}"
     )
-    
+
     # The HERO metric: Cost Saved
     cost_str = f"${GLOBAL_STATS.total_cost_saved:,.4f}"
     terminalreporter.write_line("")

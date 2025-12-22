@@ -218,18 +218,18 @@ class GeminiMock(MockLLM):
             model.generate_content = generate_content
             model.generate_content_async = generate_content_async
             model.start_chat = lambda **kw: self._create_chat_session()
-            
+
             async def start_chat_async(**kw: Any) -> Any:
                 # Chat sessions in Gemini are mostly local state management
                 # but we'll provide an async variant if needed
                 return self._create_chat_session()
-                
+
             model.start_chat_async = start_chat_async
             model.count_tokens = lambda content: MagicMock(total_tokens=len(str(content).split()) * 1.3)
-            
+
             async def count_tokens_async(content: Any) -> Any:
                 return MagicMock(total_tokens=len(str(content).split()) * 1.3)
-                
+
             model.count_tokens_async = count_tokens_async
 
             return model

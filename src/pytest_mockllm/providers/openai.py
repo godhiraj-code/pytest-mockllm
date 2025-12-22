@@ -15,7 +15,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from pytest_mockllm.core import MockError, MockLLM, MockResponse
 
@@ -360,10 +360,10 @@ class OpenAIMock(MockLLM):
 
         # Using MagicMock but with async function assignments
         async_mock_client.chat.completions.create = create_async_chat
-        
+
         async def create_async_embedding(**kw: Any) -> Any:
             return self._create_embedding(**kw)
-            
+
         async_mock_client.embeddings.create = create_async_embedding
 
         # Patch the OpenAI client

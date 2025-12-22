@@ -109,6 +109,10 @@ exclude = ["venv", "tests", "build", "dist"]
 module = ["pytest_mockllm.*"]
 disallow_untyped_decorators = false
 
+[[tool.mypy.overrides]]
+module = ["pytest_mockllm.fixtures"]
+ignore_errors = true
+
 [tool.ruff]
 line-length = 100
 target-version = "py39"

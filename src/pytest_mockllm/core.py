@@ -106,6 +106,7 @@ class TokenCounter:
         if any(x in model.lower() for x in ["gpt-", "text-embedding-", "o1-"]):
             try:
                 import tiktoken
+
                 try:
                     encoding = tiktoken.encoding_for_model(model)
                 except KeyError:
@@ -337,8 +338,12 @@ class MockLLM(ABC):
         if model and response.model == "mock-model" and response.token_usage:
             # Only update if the prompt_tokens is also at default to avoid overriding manual settings
             if response.token_usage.prompt_tokens == 10:
-                response.token_usage.completion_tokens = TokenCounter.count_tokens(response.content, model)
-                response.token_usage.total_tokens = response.token_usage.prompt_tokens + response.token_usage.completion_tokens
+                response.token_usage.completion_tokens = TokenCounter.count_tokens(
+                    response.content, model
+                )
+                response.token_usage.total_tokens = (
+                    response.token_usage.prompt_tokens + response.token_usage.completion_tokens
+                )
 
         # Simulate latency
         if response.latency_ms > 0:
@@ -347,12 +352,14 @@ class MockLLM(ABC):
         # Simulate chaos jitter
         if self._chaos_jitter > 0:
             import random
+
             jitter = random.randint(0, self._chaos_jitter)
             time.sleep(jitter / 1000.0)
 
         # Simulate random chaos errors
         if self._chaos_error_prob > 0:
             import random
+
             if random.random() < self._chaos_error_prob:
                 error_types = ["rate_limit", "timeout", "server"]
                 error_type = random.choice(error_types)
@@ -366,6 +373,7 @@ class MockLLM(ABC):
 
             # Record in global stats for the terminal summary
             from pytest_mockllm.stats import GLOBAL_STATS
+
             GLOBAL_STATS.record_call(
                 model=model or response.model or "unknown",
                 prompt=response.token_usage.prompt_tokens,
@@ -377,11 +385,13 @@ class MockLLM(ABC):
 
     def _record_call(self, **kwargs: Any) -> None:
         """Record an API call for later inspection."""
-        self._calls.append({
-            "call_number": self._call_count + 1,
-            "timestamp": time.time(),
-            **kwargs,
-        })
+        self._calls.append(
+            {
+                "call_number": self._call_count + 1,
+                "timestamp": time.time(),
+                **kwargs,
+            }
+        )
 
     @abstractmethod
     def _raise_provider_error(self, error: MockError) -> None:

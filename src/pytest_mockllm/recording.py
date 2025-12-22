@@ -77,10 +77,7 @@ class Cassette:
             name=data["name"],
             version=data.get("version", "1.0"),
             created=data.get("created", 0),
-            interactions=[
-                RecordedInteraction.from_dict(i)
-                for i in data.get("interactions", [])
-            ],
+            interactions=[RecordedInteraction.from_dict(i) for i in data.get("interactions", [])],
         )
 
     def save(self, path: Path) -> None:

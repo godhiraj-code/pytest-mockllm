@@ -93,9 +93,15 @@ class GeminiMock(MockLLM):
                     )
                 ],
                 usage_metadata=UsageMetadata(
-                    prompt_token_count=response.token_usage.prompt_tokens if response.token_usage else 10,
-                    candidates_token_count=response.token_usage.completion_tokens if response.token_usage else 50,
-                    total_token_count=response.token_usage.total_tokens if response.token_usage else 60,
+                    prompt_token_count=response.token_usage.prompt_tokens
+                    if response.token_usage
+                    else 10,
+                    candidates_token_count=response.token_usage.completion_tokens
+                    if response.token_usage
+                    else 50,
+                    total_token_count=response.token_usage.total_tokens
+                    if response.token_usage
+                    else 60,
                 ),
             )
 
@@ -117,9 +123,15 @@ class GeminiMock(MockLLM):
 
         # Usage metadata
         mock.usage_metadata = MagicMock()
-        mock.usage_metadata.prompt_token_count = response.token_usage.prompt_tokens if response.token_usage else 10
-        mock.usage_metadata.candidates_token_count = response.token_usage.completion_tokens if response.token_usage else 50
-        mock.usage_metadata.total_token_count = response.token_usage.total_tokens if response.token_usage else 60
+        mock.usage_metadata.prompt_token_count = (
+            response.token_usage.prompt_tokens if response.token_usage else 10
+        )
+        mock.usage_metadata.candidates_token_count = (
+            response.token_usage.completion_tokens if response.token_usage else 50
+        )
+        mock.usage_metadata.total_token_count = (
+            response.token_usage.total_tokens if response.token_usage else 60
+        )
 
         return mock
 
@@ -144,7 +156,7 @@ class GeminiMock(MockLLM):
             chunks = [word + " " for word in words[:-1]] + [words[-1]] if words else [""]
 
         for i, chunk_content in enumerate(chunks):
-            is_last = (i == len(chunks) - 1)
+            is_last = i == len(chunks) - 1
             yield self._build_stream_chunk(chunk_content, is_last, response)
 
     def _create_streaming_generation(self, **kwargs: Any) -> Iterator[Any]:
@@ -161,7 +173,7 @@ class GeminiMock(MockLLM):
             chunks = [word + " " for word in words[:-1]] + [words[-1]] if words else [""]
 
         for i, chunk_content in enumerate(chunks):
-            is_last = (i == len(chunks) - 1)
+            is_last = i == len(chunks) - 1
             yield self._build_stream_chunk(chunk_content, is_last, response)
 
     def _build_stream_chunk(
@@ -225,7 +237,9 @@ class GeminiMock(MockLLM):
                 return self._create_chat_session()
 
             model.start_chat_async = start_chat_async
-            model.count_tokens = lambda content: MagicMock(total_tokens=len(str(content).split()) * 1.3)
+            model.count_tokens = lambda content: MagicMock(
+                total_tokens=len(str(content).split()) * 1.3
+            )
 
             async def count_tokens_async(content: Any) -> Any:
                 return MagicMock(total_tokens=len(str(content).split()) * 1.3)

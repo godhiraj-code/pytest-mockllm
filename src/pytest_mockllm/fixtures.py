@@ -22,7 +22,6 @@ if TYPE_CHECKING:
     from _pytest.fixtures import FixtureRequest
 
 
-
 @pytest.fixture
 def mock_openai() -> Generator[OpenAIMock, None, None]:
     """
@@ -226,4 +225,3 @@ def llm_recorder(request: FixtureRequest) -> Generator[LLMRecorder, None, None]:
 
     with recorder:
         yield recorder
-

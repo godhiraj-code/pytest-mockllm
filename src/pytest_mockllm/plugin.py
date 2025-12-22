@@ -69,6 +69,7 @@ def pytest_configure(config: Config) -> None:
 def pytest_sessionstart(session: Any) -> None:
     """Initialize global statistics."""
     from pytest_mockllm.stats import GLOBAL_STATS
+
     GLOBAL_STATS.reset()
 
 
@@ -105,7 +106,9 @@ def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: Any)
     # The HERO metric: Cost Saved
     cost_str = f"${GLOBAL_STATS.total_cost_saved:,.4f}"
     terminalreporter.write_line("")
-    terminalreporter.write_sep("=", f" 💎 Total Estimated Cost Saved: {cost_str} 💎 ", bold=True, blue=True)
+    terminalreporter.write_sep(
+        "=", f" 💎 Total Estimated Cost Saved: {cost_str} 💎 ", bold=True, blue=True
+    )
     terminalreporter.write_line("")
 
 

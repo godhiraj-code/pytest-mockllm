@@ -116,7 +116,9 @@ class OpenAIMock(MockLLM):
             message = ChatCompletionMessage(
                 role="assistant",
                 content=response.content,
-                tool_calls=self._format_tool_calls(response.tool_calls) if response.tool_calls else None,
+                tool_calls=self._format_tool_calls(response.tool_calls)
+                if response.tool_calls
+                else None,
                 function_call=response.function_call,
             )
 
@@ -315,11 +317,12 @@ class OpenAIMock(MockLLM):
 
         # Create reproducible embedding based on input hash
         import hashlib
+
         hash_bytes = hashlib.sha256(input_text.encode()).digest()
         embedding = [
             (b / 255.0 - 0.5) * 2  # Normalize to [-1, 1]
             for b in hash_bytes * (self._embedding_dimension // len(hash_bytes) + 1)
-        ][:self._embedding_dimension]
+        ][: self._embedding_dimension]
 
         try:
             from openai.types import CreateEmbeddingResponse, Embedding
@@ -329,7 +332,9 @@ class OpenAIMock(MockLLM):
                 data=[Embedding(embedding=embedding, index=0, object="embedding")],
                 model=kwargs.get("model", "text-embedding-ada-002"),
                 object="list",
-                usage=Usage(prompt_tokens=len(input_text.split()), total_tokens=len(input_text.split())),
+                usage=Usage(
+                    prompt_tokens=len(input_text.split()), total_tokens=len(input_text.split())
+                ),
             )
         except ImportError:
             mock = MagicMock()

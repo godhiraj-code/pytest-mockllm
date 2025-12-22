@@ -32,5 +32,6 @@ class UsageStats:
         self.total_cost_saved = 0.0
         self.model_counts.clear()
 
+
 # Global singleton
 GLOBAL_STATS = UsageStats()

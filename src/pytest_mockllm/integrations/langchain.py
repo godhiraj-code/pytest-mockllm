@@ -75,9 +75,15 @@ class LangChainMock(MockLLM):
                 content=response.content,
                 response_metadata={
                     "token_usage": {
-                        "prompt_tokens": response.token_usage.prompt_tokens if response.token_usage else 10,
-                        "completion_tokens": response.token_usage.completion_tokens if response.token_usage else 50,
-                        "total_tokens": response.token_usage.total_tokens if response.token_usage else 60,
+                        "prompt_tokens": response.token_usage.prompt_tokens
+                        if response.token_usage
+                        else 10,
+                        "completion_tokens": response.token_usage.completion_tokens
+                        if response.token_usage
+                        else 50,
+                        "total_tokens": response.token_usage.total_tokens
+                        if response.token_usage
+                        else 60,
                     },
                     "model_name": response.model,
                     "finish_reason": response.finish_reason,
@@ -104,9 +110,15 @@ class LangChainMock(MockLLM):
             mock.content = response.content
             mock.response_metadata = {
                 "token_usage": {
-                    "prompt_tokens": response.token_usage.prompt_tokens if response.token_usage else 10,
-                    "completion_tokens": response.token_usage.completion_tokens if response.token_usage else 50,
-                    "total_tokens": response.token_usage.total_tokens if response.token_usage else 60,
+                    "prompt_tokens": response.token_usage.prompt_tokens
+                    if response.token_usage
+                    else 10,
+                    "completion_tokens": response.token_usage.completion_tokens
+                    if response.token_usage
+                    else 50,
+                    "total_tokens": response.token_usage.total_tokens
+                    if response.token_usage
+                    else 60,
                 },
             }
             mock.id = response.id
@@ -204,7 +216,9 @@ class LangChainMock(MockLLM):
 
         # Make it work with LCEL's | operator
         mock_model.__or__ = lambda self, other: mock_model
-        mock_model.__ror__ = lambda self, other: MagicMock(invoke=invoke, stream=stream, ainvoke=ainvoke, astream=astream)
+        mock_model.__ror__ = lambda self, other: MagicMock(
+            invoke=invoke, stream=stream, ainvoke=ainvoke, astream=astream
+        )
 
         # bind_tools for function calling
         def bind_tools(tools: list[Any], **kwargs: Any) -> MagicMock:
@@ -266,13 +280,15 @@ class LangChainMock(MockLLM):
         """
         response = MockResponse(
             content=content,
-            tool_calls=[{
-                "id": f"call_{uuid.uuid4().hex[:8]}",
-                "function": {
-                    "name": name,
-                    "arguments": arguments or {},
-                },
-            }],
+            tool_calls=[
+                {
+                    "id": f"call_{uuid.uuid4().hex[:8]}",
+                    "function": {
+                        "name": name,
+                        "arguments": arguments or {},
+                    },
+                }
+            ],
         )
         self._responses.append(response)
         return self

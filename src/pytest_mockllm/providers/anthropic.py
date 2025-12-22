@@ -81,7 +81,9 @@ class AnthropicMock(MockLLM):
                 body={"error": {"message": error.message}},
             )
         except ImportError:
-            raise RuntimeError(f"Anthropic API Error ({error.error_type}): {error.message}") from None
+            raise RuntimeError(
+                f"Anthropic API Error ({error.error_type}): {error.message}"
+            ) from None
 
     def _create_message(self, **kwargs: Any) -> Any:
         """Create a mock message response."""
@@ -120,7 +122,9 @@ class AnthropicMock(MockLLM):
 
             usage = Usage(
                 input_tokens=response.token_usage.prompt_tokens if response.token_usage else 10,
-                output_tokens=response.token_usage.completion_tokens if response.token_usage else 50,
+                output_tokens=response.token_usage.completion_tokens
+                if response.token_usage
+                else 50,
             )
 
             stop_reason = "tool_use" if response.tool_calls else "end_turn"
@@ -183,40 +187,61 @@ class AnthropicMock(MockLLM):
             chunks = [word + " " for word in words[:-1]] + [words[-1]] if words else [""]
 
         # Emit message_start
-        yield self._build_stream_event("message_start", {
-            "message": {
-                "id": response.id,
-                "type": "message",
-                "role": "assistant",
-                "content": [],
-                "model": model,
-                "stop_reason": None,
-                "stop_sequence": None,
-                "usage": {"input_tokens": response.token_usage.prompt_tokens if response.token_usage else 10, "output_tokens": 0},
-            }
-        })
+        yield self._build_stream_event(
+            "message_start",
+            {
+                "message": {
+                    "id": response.id,
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [],
+                    "model": model,
+                    "stop_reason": None,
+                    "stop_sequence": None,
+                    "usage": {
+                        "input_tokens": response.token_usage.prompt_tokens
+                        if response.token_usage
+                        else 10,
+                        "output_tokens": 0,
+                    },
+                }
+            },
+        )
 
         # Emit content_block_start
-        yield self._build_stream_event("content_block_start", {
-            "index": 0,
-            "content_block": {"type": "text", "text": ""},
-        })
+        yield self._build_stream_event(
+            "content_block_start",
+            {
+                "index": 0,
+                "content_block": {"type": "text", "text": ""},
+            },
+        )
 
         # Emit content_block_delta for each chunk
         for chunk_content in chunks:
-            yield self._build_stream_event("content_block_delta", {
-                "index": 0,
-                "delta": {"type": "text_delta", "text": chunk_content},
-            })
+            yield self._build_stream_event(
+                "content_block_delta",
+                {
+                    "index": 0,
+                    "delta": {"type": "text_delta", "text": chunk_content},
+                },
+            )
 
         # Emit content_block_stop
         yield self._build_stream_event("content_block_stop", {"index": 0})
 
         # Emit message_delta
-        yield self._build_stream_event("message_delta", {
-            "delta": {"stop_reason": "end_turn", "stop_sequence": None},
-            "usage": {"output_tokens": response.token_usage.completion_tokens if response.token_usage else 50},
-        })
+        yield self._build_stream_event(
+            "message_delta",
+            {
+                "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+                "usage": {
+                    "output_tokens": response.token_usage.completion_tokens
+                    if response.token_usage
+                    else 50
+                },
+            },
+        )
 
         # Emit message_stop
         yield self._build_stream_event("message_stop", {})
@@ -235,40 +260,61 @@ class AnthropicMock(MockLLM):
             chunks = [word + " " for word in words[:-1]] + [words[-1]] if words else [""]
 
         # Emit message_start
-        yield self._build_stream_event("message_start", {
-            "message": {
-                "id": response.id,
-                "type": "message",
-                "role": "assistant",
-                "content": [],
-                "model": model,
-                "stop_reason": None,
-                "stop_sequence": None,
-                "usage": {"input_tokens": response.token_usage.prompt_tokens if response.token_usage else 10, "output_tokens": 0},
-            }
-        })
+        yield self._build_stream_event(
+            "message_start",
+            {
+                "message": {
+                    "id": response.id,
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [],
+                    "model": model,
+                    "stop_reason": None,
+                    "stop_sequence": None,
+                    "usage": {
+                        "input_tokens": response.token_usage.prompt_tokens
+                        if response.token_usage
+                        else 10,
+                        "output_tokens": 0,
+                    },
+                }
+            },
+        )
 
         # Emit content_block_start
-        yield self._build_stream_event("content_block_start", {
-            "index": 0,
-            "content_block": {"type": "text", "text": ""},
-        })
+        yield self._build_stream_event(
+            "content_block_start",
+            {
+                "index": 0,
+                "content_block": {"type": "text", "text": ""},
+            },
+        )
 
         # Emit content_block_delta for each chunk
         for chunk_content in chunks:
-            yield self._build_stream_event("content_block_delta", {
-                "index": 0,
-                "delta": {"type": "text_delta", "text": chunk_content},
-            })
+            yield self._build_stream_event(
+                "content_block_delta",
+                {
+                    "index": 0,
+                    "delta": {"type": "text_delta", "text": chunk_content},
+                },
+            )
 
         # Emit content_block_stop
         yield self._build_stream_event("content_block_stop", {"index": 0})
 
         # Emit message_delta
-        yield self._build_stream_event("message_delta", {
-            "delta": {"stop_reason": "end_turn", "stop_sequence": None},
-            "usage": {"output_tokens": response.token_usage.completion_tokens if response.token_usage else 50},
-        })
+        yield self._build_stream_event(
+            "message_delta",
+            {
+                "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+                "usage": {
+                    "output_tokens": response.token_usage.completion_tokens
+                    if response.token_usage
+                    else 50
+                },
+            },
+        )
 
         # Emit message_stop
         yield self._build_stream_event("message_stop", {})

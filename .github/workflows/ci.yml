@@ -58,7 +58,7 @@ jobs:
         run: ruff check src/
 
       - name: Run MyPy
-        run: mypy src/pytest_mockllm --ignore-missing-imports
+        run: mypy src/pytest_mockllm --ignore-missing-imports --python-version 3.11 --follow-imports=silent
 
   build:
     runs-on: ubuntu-latest

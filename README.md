@@ -9,7 +9,7 @@
   <a href="https://pypi.org/project/pytest-mockllm/"><img src="https://img.shields.io/pypi/pyversions/pytest-mockllm" alt="Python versions"></a>
   <a href="https://github.com/godhiraj-code/pytest-mockllm/actions"><img src="https://github.com/godhiraj-code/pytest-mockllm/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/godhiraj-code/pytest-mockllm/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
-  <a href="https://pepy.tech/project/pytest-mockllm"><img src="https://static.pepy.tech/badge/pytest-mockllm" alt="Downloads"></a>
+  <a href="https://pypi.org/project/pytest-mockllm/"><img src="https://img.shields.io/pypi/dm/pytest-mockllm" alt="Downloads"></a>
 </p>
 
 <p align="center">
@@ -17,8 +17,8 @@
   <a href="#-features">Features</a> •
   <a href="#-providers">Providers</a> •
   <a href="#-examples">Examples</a> •
-  <a href="#-recording">Recording</a> •
-  <a href="#-docs">Docs</a>
+  <a href="#-recording--replay">Recording</a> •
+  <a href="#-configuration">Configuration</a>
 </p>
 
 ---

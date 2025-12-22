@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from pytest_mockllm.core import MockLLM
 from pytest_mockllm.providers.anthropic import AnthropicMock
 from pytest_mockllm.providers.gemini import GeminiMock
 from pytest_mockllm.providers.openai import OpenAIMock
@@ -117,7 +116,7 @@ def mock_gemini() -> Generator[GeminiMock, None, None]:
 
 
 @pytest.fixture
-def mock_llm(request: FixtureRequest) -> Generator[MockLLM, None, None]:
+def mock_llm(request: FixtureRequest):  # type: ignore[no-untyped-def]
     """
     Universal LLM mock - defaults to OpenAI.
 

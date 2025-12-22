@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator, Iterator
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 from pytest_mockllm.core import MockError, MockLLM, MockResponse
@@ -135,7 +135,7 @@ class AnthropicMock(MockLLM):
                 role="assistant",
                 content=content_blocks,
                 model=model,
-                stop_reason=stop_reason,
+                stop_reason=cast(Any, stop_reason),
                 stop_sequence=None,
                 usage=usage,
             )

@@ -73,7 +73,6 @@ class GeminiMock(MockLLM):
                 Candidate,
                 Content,
                 Part,
-                UsageMetadata,
             )
             from google.ai.generativelanguage_v1beta import (
                 GenerateContentResponse as ProtoResponse,
@@ -92,17 +91,17 @@ class GeminiMock(MockLLM):
                         index=0,
                     )
                 ],
-                usage_metadata=UsageMetadata(
-                    prompt_token_count=response.token_usage.prompt_tokens
+                usage_metadata={
+                    "prompt_token_count": response.token_usage.prompt_tokens
                     if response.token_usage
                     else 10,
-                    candidates_token_count=response.token_usage.completion_tokens
+                    "candidates_token_count": response.token_usage.completion_tokens
                     if response.token_usage
                     else 50,
-                    total_token_count=response.token_usage.total_tokens
+                    "total_token_count": response.token_usage.total_tokens
                     if response.token_usage
                     else 60,
-                ),
+                },
             )
 
             return GenerateContentResponse.from_response(proto)

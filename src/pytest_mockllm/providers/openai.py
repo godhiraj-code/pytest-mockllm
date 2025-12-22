@@ -14,7 +14,7 @@ import json
 import time
 import uuid
 from collections.abc import AsyncIterator, Iterator
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 from pytest_mockllm.core import MockError, MockLLM, MockResponse
@@ -119,13 +119,13 @@ class OpenAIMock(MockLLM):
                 tool_calls=self._format_tool_calls(response.tool_calls)
                 if response.tool_calls
                 else None,
-                function_call=response.function_call,
+                function_call=cast(Any, response.function_call),
             )
 
             choice = Choice(
                 index=0,
                 message=message,
-                finish_reason=response.finish_reason,
+                finish_reason=cast(Any, response.finish_reason),
             )
 
             usage = None

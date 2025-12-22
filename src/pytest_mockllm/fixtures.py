@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from pytest_mockllm.core import MockLLM
 from pytest_mockllm.providers.anthropic import AnthropicMock
 from pytest_mockllm.providers.gemini import GeminiMock
 from pytest_mockllm.providers.openai import OpenAIMock
@@ -20,6 +21,7 @@ from pytest_mockllm.recording import LLMRecorder
 
 if TYPE_CHECKING:
     from _pytest.fixtures import FixtureRequest
+
 
 
 @pytest.fixture
@@ -115,7 +117,7 @@ def mock_gemini() -> Generator[GeminiMock, None, None]:
 
 
 @pytest.fixture
-def mock_llm(request: FixtureRequest) -> Generator[OpenAIMock, None, None]:
+def mock_llm(request: FixtureRequest) -> Generator[MockLLM, None, None]:
     """
     Universal LLM mock - defaults to OpenAI.
 
@@ -151,7 +153,7 @@ def mock_llm(request: FixtureRequest) -> Generator[OpenAIMock, None, None]:
 
 
 @pytest.fixture
-def mock_langchain() -> Generator[LangChainMock, None, None]:
+def mock_langchain():
     """
     Mock LangChain LLM and ChatModel for testing.
 
@@ -226,8 +228,3 @@ def llm_recorder(request: FixtureRequest) -> Generator[LLMRecorder, None, None]:
     with recorder:
         yield recorder
 
-
-# Type alias for the LangChain mock (defined here to avoid circular import)
-class LangChainMock:
-    """Placeholder - real implementation in integrations/langchain.py"""
-    pass

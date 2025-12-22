@@ -18,7 +18,8 @@ def test_redact_azure_key():
     assert "1234567890" not in redacted
 
 def test_redact_gcp_key():
-    text = "Key: AIzaSyBv_v5xJ-W_N4mS-abcdefghijklmnoprs"
+    # Using a fake pattern that matches our regex but doesn't look real to GitHub
+    text = "Key: AIza_MOCK_GOOGLE_API_KEY_FOR_TESTING_123"
     redacted = PIIRedactor.redact_text(text)
     assert "[REDACTED_GCP_KEY]" in redacted
     assert "AIza" not in redacted
@@ -31,7 +32,7 @@ def test_redact_dict():
             "token": "secret-token",
             "msg": "Hello sk-1234567890abcdef12345"
         },
-        "list": ["AIzaSyBv_v5xJ-W_N4mS-abcdefghijklmnoprs", {"auth": "Bearer token"}]
+        "list": ["AIza_MOCK_GOOGLE_API_KEY_FOR_TESTING_123", {"auth": "Bearer token"}]
     }
     redacted = PIIRedactor.redact_dict(data)
     

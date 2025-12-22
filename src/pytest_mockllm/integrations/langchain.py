@@ -63,7 +63,14 @@ class LangChainMock(MockLLM):
         """Create a mock LangChain message response."""
         self._record_call(type="invoke", messages=messages, **kwargs)
         response = self._get_next_response()
+        self._simulate_delay(self._get_delay_ms(response))
+        return self._build_langchain_message(response)
 
+    async def _create_async_message(self, messages: Any = None, **kwargs: Any) -> Any:
+        """Create a mock async LangChain message response."""
+        self._record_call(type="ainvoke", messages=messages, **kwargs)
+        response = self._get_next_response()
+        await self._simulate_delay_async(self._get_delay_ms(response))
         return self._build_langchain_message(response)
 
     def _build_langchain_message(self, response: MockResponse) -> Any:
@@ -129,6 +136,7 @@ class LangChainMock(MockLLM):
         """Create an async streaming response for LangChain."""
         self._record_call(type="stream", **kwargs)
         response = self._get_next_response()
+        await self._simulate_delay_async(self._get_delay_ms(response))
 
         if response.stream_chunks:
             chunks = response.stream_chunks
@@ -148,6 +156,7 @@ class LangChainMock(MockLLM):
         """Create a streaming response for LangChain."""
         self._record_call(type="stream", **kwargs)
         response = self._get_next_response()
+        self._simulate_delay(self._get_delay_ms(response))
 
         # Split content into chunks
         if response.stream_chunks:
@@ -203,7 +212,7 @@ class LangChainMock(MockLLM):
 
         # ainvoke() - async version
         async def ainvoke(messages: Any, *args: Any, **kwargs: Any) -> Any:
-            return self._create_message(messages=messages, **kwargs)
+            return await self._create_async_message(messages=messages, **kwargs)
 
         mock_model.ainvoke = ainvoke
 

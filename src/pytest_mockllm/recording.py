@@ -105,6 +105,10 @@ class PIIRedactor:
         (re.compile(r"sk-[a-zA-Z0-9]{20,}", re.IGNORECASE), "[REDACTED_OPENAI_KEY]"),
         # Anthropic keys: ant-api-...
         (re.compile(r"ant-api-[a-zA-Z0-9\-_]{20,}", re.IGNORECASE), "[REDACTED_ANTHROPIC_KEY]"),
+        # Azure OpenAI
+        (re.compile(r"api-key: [a-zA-Z0-9]{32}", re.IGNORECASE), "api-key: [REDACTED]"),
+        # Google/GCP keys: AIza...
+        (re.compile(r"AIza[0-9A-Za-z-_]{35}", re.IGNORECASE), "[REDACTED_GCP_KEY]"),
         # Generic Bearer tokens
         (re.compile(r"Bearer [a-zA-Z0-9\.\-_]{20,}", re.IGNORECASE), "Bearer [REDACTED]"),
     ]

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytest-mockllm"
-version = "0.2.1"
+version = "0.2.2"
 description = "🚀 Zero-config pytest plugin for mocking LLM APIs - OpenAI, Anthropic, Gemini, LangChain & more"
 readme = "README.md"
 license = "MIT"

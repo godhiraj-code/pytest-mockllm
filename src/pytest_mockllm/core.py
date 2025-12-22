@@ -345,17 +345,6 @@ class MockLLM(ABC):
                     response.token_usage.prompt_tokens + response.token_usage.completion_tokens
                 )
 
-        # Simulate latency
-        if response.latency_ms > 0:
-            time.sleep(response.latency_ms / 1000.0)
-
-        # Simulate chaos jitter
-        if self._chaos_jitter > 0:
-            import random
-
-            jitter = random.randint(0, self._chaos_jitter)
-            time.sleep(jitter / 1000.0)
-
         # Simulate random chaos errors
         if self._chaos_error_prob > 0:
             import random
@@ -392,6 +381,25 @@ class MockLLM(ABC):
                 **kwargs,
             }
         )
+
+    def _get_delay_ms(self, response: MockResponse) -> int:
+        """Calculate total delay (base latency + jitter) in milliseconds."""
+        delay = response.latency_ms
+        if self._chaos_jitter > 0:
+            import random
+            delay += random.randint(0, self._chaos_jitter)
+        return delay
+
+    def _simulate_delay(self, ms: int) -> None:
+        """Simulate delay synchronously (blocks thread)."""
+        if ms > 0:
+            time.sleep(ms / 1000.0)
+
+    async def _simulate_delay_async(self, ms: int) -> None:
+        """Simulate delay asynchronously (non-blocking)."""
+        if ms > 0:
+            import asyncio
+            await asyncio.sleep(ms / 1000.0)
 
     @abstractmethod
     def _raise_provider_error(self, error: MockError) -> None:

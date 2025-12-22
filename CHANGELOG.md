@@ -5,7 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.2] - 2025-12-22
+
+### Added
+
+- 🔒 **Enterprise Redaction** - Added PII patterns for Azure OpenAI and Google Cloud (GCP) API keys.
+- 🛡️ **Thread-Safe Analytics** - Implemented locking for global statistics to support parallel testing with `pytest-xdist`.
+
+### Fixed
+
+- ⚡ **Non-blocking Async Latency** - Fixed a critical issue where `time.sleep` in jitter simulation would block the async event loop; now uses `asyncio.sleep` for async tests.
+- 🔗 **LangChain Parity** - Updated LangChain integration to correctly handle async delays and error simulation.
+
+## [0.2.0] - 2025-12-22
+
+### Added
+
+- 🚀 **True Async Support** - Replaced fake async with real coroutines and async iterators for OpenAI, Anthropic, Gemini, and LangChain.
+- 🎯 **Accurate Tokenizers** - Integrated `tiktoken` for OpenAI and improved Claude heuristics for high-fidelity token counting.
+- 📊 **Cost Analytics Dashboard** - Professional terminal summary showing USD saved per test run.
+- ⚡ **Chaos Engineering** - New `simulate_jitter` and `simulate_random_errors` tools to test application resilience.
+- 🔒 **Secure Recording** - Automatic PII redaction (API keys, Bearer tokens) in cassettes using the new `PIIRedactor`.
+- 🐍 **Python 3.14 Support** - Full compatibility and CI verification for the latest Python version.
+
+### Fixed
+
+- Resolved `TypeError` when calling async methods on mock clients.
+- Improved MyPy type fidelity for provider-specific response objects.
+- Fixed intermittent CI failures on Windows and MacOS runners.
 
 ## [0.1.0] - 2024-12-22
 

@@ -90,6 +90,7 @@ class AnthropicMock(MockLLM):
         self._record_call(type="messages.create", **kwargs)
         model = kwargs.get("model", self._default_model)
         response = self._get_next_response(model=model)
+        self._simulate_delay(self._get_delay_ms(response))
         return self._build_message_response(response, model)
 
     def _build_message_response(self, response: MockResponse, model: str) -> Any:
@@ -171,6 +172,7 @@ class AnthropicMock(MockLLM):
         self._record_call(type="messages.create", **kwargs)
         model = kwargs.get("model", self._default_model)
         response = self._get_next_response(model=model)
+        await self._simulate_delay_async(self._get_delay_ms(response))
         return self._build_message_response(response, model)
 
     async def _create_async_streaming_message(self, **kwargs: Any) -> AsyncIterator[Any]:

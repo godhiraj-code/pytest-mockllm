@@ -116,13 +116,15 @@ Full type hints and objects that match SDK structures perfectly.
 
 ---
 
-## 🆕 What's New in v0.2.1
+## 🆕 What's New in v0.2.2 "Battle-Hardened"
 
-This major release transforms `pytest-mockllm` into a professional-grade tool:
+This release hardens the library for high-concurrency and enterprise environments:
+- 🛡️ **Thread-Safety**: Global statistics are now locked for safe parallel testing with `pytest-xdist`.
+- ⚡ **Async Latency**: Non-blocking delays using `asyncio.sleep` for 100% async performance.
+- 🔒 **Enterprise Security**: Expanded PII redaction for Azure OpenAI and GCP.
 - 🚀 **True Async Support**: Real coroutines and async iterators for all providers.
 - 🎯 **Accurate Tokenizers**: High-fidelity counting with `tiktoken`.
 - 📊 **Cost Saved Dashboard**: Live ROI tracking in your terminal.
-- ⚡ **Chaos Engineering**: Proactive resilience testing with jitter and error simulation.
 - 🐍 **Next-Gen Support**: Verified compatibility with **Python 3.14**.
 
 ---

@@ -80,7 +80,15 @@ ruff check src/ --fix
 
 # Type checking
 mypy src/
+
 ```
+
+## High-Fidelity Standards (v0.2.0+)
+
+We prioritize "True Fidelity." When contributing:
+- **Async First**: Always provide `async def` variants for mock methods.
+- **Type Strict**: Ensure MyPy passes with no errors on new provider response objects.
+- **Leak Proof**: Ensure the `PIIRedactor` is updated if you add new fields that could contain sensitive data.
 
 ## Commit Messages
 

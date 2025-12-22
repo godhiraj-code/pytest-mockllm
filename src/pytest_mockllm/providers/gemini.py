@@ -63,7 +63,7 @@ class GeminiMock(MockLLM):
         self._record_call(type="generate_content", **kwargs)
         model = kwargs.get("model", self._default_model)
         response = self._get_next_response(model=model)
-
+        self._simulate_delay(self._get_delay_ms(response))
         return self._build_generation_response(response)
 
     def _build_generation_response(self, response: MockResponse) -> Any:
@@ -139,6 +139,7 @@ class GeminiMock(MockLLM):
         self._record_call(type="generate_content", **kwargs)
         model = kwargs.get("model", self._default_model)
         response = self._get_next_response(model=model)
+        await self._simulate_delay_async(self._get_delay_ms(response))
         return self._build_generation_response(response)
 
     async def _create_async_streaming_generation(self, **kwargs: Any) -> AsyncIterator[Any]:
@@ -146,6 +147,7 @@ class GeminiMock(MockLLM):
         self._record_call(type="generate_content", stream=True, **kwargs)
         model = kwargs.get("model", self._default_model)
         response = self._get_next_response(model=model)
+        await self._simulate_delay_async(self._get_delay_ms(response))
 
         # Split content into chunks
         if response.stream_chunks:
@@ -163,6 +165,7 @@ class GeminiMock(MockLLM):
         self._record_call(type="generate_content", stream=True, **kwargs)
         model = kwargs.get("model", self._default_model)
         response = self._get_next_response(model=model)
+        self._simulate_delay(self._get_delay_ms(response))
 
         # Split content into chunks
         if response.stream_chunks:

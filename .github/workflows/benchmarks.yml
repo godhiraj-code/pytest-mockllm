@@ -1,0 +1,39 @@
+name: Performance Benchmarks
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install package and dependencies
+        run: |
+          pip install .[all]
+          pip install build
+
+      - name: Run Benchmarks
+        run: python scripts/generate_marketing_evidence.py
+
+      - name: Commit Benchmark Report
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add benchmarks/BENCHMARK.md
+          git diff --quiet && git diff --staged --quiet || git commit -m "docs: update performance benchmarks [skip ci]"
+          git push

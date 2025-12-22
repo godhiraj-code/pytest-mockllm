@@ -112,7 +112,7 @@ VCR-style recording for golden tests.
 Simulate rate limits, timeouts, and random latency jitter to test your app's resilience.
 
 ### 💰 Cost & Token Tracking
-Professional-grade token counting with `tiktoken` and built-in cost dashboard.
+Professional-grade token counting with `tiktoken` and built-in cost dashboard. See [Live Benchmarks](benchmarks/BENCHMARK.md).
 
 ### 📼 Secure Recording
 VCR-style recording with automatic PII redaction (API keys, Bearer tokens).

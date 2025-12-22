@@ -23,6 +23,12 @@
 
 ---
 
+> [!IMPORTANT]
+> **🛡️ Safe-by-Default**: `pytest-mockllm` is mathematically incapable of hitting an external LLM endpoint unless you explicitly run in "Record Mode" (`--llm-record`).
+> - **No Bills**: By default, all calls are intercepted locally.
+> - **No API Keys Required**: Test your logic without setting `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`.
+> - **Safe CI**: Prevent accidental billing in your CI pipelines with zero configuration.
+
 ## Why pytest-mockllm?
 
 Testing LLM applications is **painful**:

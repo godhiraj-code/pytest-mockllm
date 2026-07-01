@@ -7,6 +7,7 @@ enabling easy testing of chains, agents, and other LangChain components.
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
@@ -194,6 +195,87 @@ class LangChainMock(MockLLM):
             mock.id = response_id if is_first else None
             return mock
 
+    def _parse_structured_output(self, schema: Any, content: str) -> Any:
+        """Parse a mock response body using LangChain structured-output semantics."""
+        if hasattr(schema, "model_validate_json"):
+            return schema.model_validate_json(content)
+
+        if hasattr(schema, "parse_raw"):
+            return schema.parse_raw(content)
+
+        data = json.loads(content)
+
+        if isinstance(schema, dict):
+            return data
+
+        if hasattr(schema, "model_validate"):
+            return schema.model_validate(data)
+
+        if hasattr(schema, "parse_obj"):
+            return schema.parse_obj(data)
+
+        if callable(schema):
+            try:
+                if isinstance(data, dict):
+                    return schema(**data)
+                return schema(data)
+            except TypeError:
+                pass
+
+        return data
+
+    def _format_structured_output(
+        self,
+        raw_message: Any,
+        schema: Any,
+        include_raw: bool = False,
+    ) -> Any:
+        """Return parsed structured output, optionally matching LangChain's raw envelope."""
+        try:
+            parsed = self._parse_structured_output(schema, raw_message.content)
+            parsing_error = None
+        except Exception as exc:
+            if not include_raw:
+                raise
+            parsed = None
+            parsing_error = exc
+
+        if include_raw:
+            return {
+                "raw": raw_message,
+                "parsed": parsed,
+                "parsing_error": parsing_error,
+            }
+
+        return parsed
+
+    def _create_mock_structured_model(self, schema: Any, include_raw: bool = False) -> MagicMock:
+        """Create a mock runnable returned by with_structured_output()."""
+        structured_model = MagicMock()
+
+        def invoke(messages: Any, *args: Any, **kwargs: Any) -> Any:
+            raw_message = self._create_message(messages=messages, **kwargs)
+            return self._format_structured_output(raw_message, schema, include_raw=include_raw)
+
+        structured_model.invoke = invoke
+
+        async def ainvoke(messages: Any, *args: Any, **kwargs: Any) -> Any:
+            raw_message = await self._create_async_message(messages=messages, **kwargs)
+            return self._format_structured_output(raw_message, schema, include_raw=include_raw)
+
+        structured_model.ainvoke = ainvoke
+
+        structured_model.__or__ = lambda self, other: structured_model
+        structured_model.__ror__ = lambda self, other: MagicMock(invoke=invoke, ainvoke=ainvoke)
+        structured_model.with_structured_output = (
+            lambda next_schema, **kw: self._create_mock_structured_model(
+                next_schema,
+                include_raw=kw.get("include_raw", False),
+            )
+        )
+
+        return structured_model
+
     def _create_mock_chat_model(self) -> MagicMock:
         """Create a mock ChatModel that can be used in LangChain chains."""
         mock_model = MagicMock()
@@ -236,7 +318,12 @@ class LangChainMock(MockLLM):
         mock_model.bind_tools = bind_tools
 
         # with_structured_output for structured responses
-        mock_model.with_structured_output = lambda schema, **kw: mock_model
+        mock_model.with_structured_output = (
+            lambda schema, **kw: self._create_mock_structured_model(
+                schema,
+                include_raw=kw.get("include_raw", False),
+            )
+        )
 
         return mock_model
 

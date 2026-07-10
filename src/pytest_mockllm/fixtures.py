@@ -22,8 +22,13 @@ if TYPE_CHECKING:
     from _pytest.fixtures import FixtureRequest
 
 
+def _strict_enabled(request: FixtureRequest) -> bool:
+    """Resolve strict mode from the CLI flag or pytest configuration."""
+    return bool(request.config.getoption("--llm-strict") or request.config.getini("llm_strict"))
+
+
 @pytest.fixture
-def mock_openai() -> Generator[OpenAIMock, None, None]:
+def mock_openai(request: FixtureRequest) -> Generator[OpenAIMock, None, None]:
     """
     Mock OpenAI API for testing.
 
@@ -63,11 +68,12 @@ def mock_openai() -> Generator[OpenAIMock, None, None]:
         ...     assert "streamed" in full_response
     """
     with OpenAIMock() as mock:
+        mock.set_strict_mode(_strict_enabled(request))
         yield mock
 
 
 @pytest.fixture
-def mock_anthropic() -> Generator[AnthropicMock, None, None]:
+def mock_anthropic(request: FixtureRequest) -> Generator[AnthropicMock, None, None]:
     """
     Mock Anthropic Claude API for testing.
 
@@ -89,11 +95,12 @@ def mock_anthropic() -> Generator[AnthropicMock, None, None]:
         ...     assert "happy" in response.content[0].text.lower()
     """
     with AnthropicMock() as mock:
+        mock.set_strict_mode(_strict_enabled(request))
         yield mock
 
 
 @pytest.fixture
-def mock_gemini() -> Generator[GeminiMock, None, None]:
+def mock_gemini(request: FixtureRequest) -> Generator[GeminiMock, None, None]:
     """
     Mock Google Gemini API for testing.
 
@@ -111,6 +118,7 @@ def mock_gemini() -> Generator[GeminiMock, None, None]:
         ...     assert "found" in response.text.lower()
     """
     with GeminiMock() as mock:
+        mock.set_strict_mode(_strict_enabled(request))
         yield mock
 
 
@@ -147,6 +155,7 @@ def mock_llm(request: FixtureRequest):  # type: ignore[no-untyped-def]
     mock_class = mock_classes.get(provider, OpenAIMock)
 
     with mock_class() as mock:
+        mock.set_strict_mode(_strict_enabled(request))
         yield mock
 
 
@@ -204,7 +213,9 @@ def llm_recorder(request: FixtureRequest) -> Generator[LLMRecorder, None, None]:
         ...     assert response.choices[0].message.content
     """
     # Get cassette directory from config or use default
-    cassette_dir = request.config.getoption("--llm-cassette-dir", default="tests/llm_cassettes")
+    cassette_dir = request.config.getoption("--llm-cassette-dir") or request.config.getini(
+        "llm_cassette_dir"
+    )
     record_mode = request.config.getoption("--llm-record", default=False)
 
     # Use test name as cassette name

@@ -24,10 +24,10 @@
 ---
 
 > [!IMPORTANT]
-> **🛡️ Safe-by-Default**: `pytest-mockllm` is mathematically incapable of hitting an external LLM endpoint unless you explicitly run in "Record Mode" (`--llm-record`).
-> - **No Bills**: By default, all calls are intercepted locally.
-> - **No API Keys Required**: Test your logic without setting `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`.
-> - **Safe CI**: Prevent accidental billing in your CI pipelines with zero configuration.
+> **Fixture-scoped interception:** Calls made through an active provider fixture such as
+> `mock_openai` are intercepted locally. Installing the plugin alone does not block network
+> access from tests that do not use a mock fixture. Keep real API keys out of unit-test
+> environments and use normal CI egress controls as a second safety layer.
 
 ## Why pytest-mockllm?
 
@@ -60,10 +60,11 @@ No setup. No API keys. No costs. **Just fast, reliable tests.**
 ### Installation
 
 ```bash
-pip install pytest-mockllm
+pip install "pytest-mockllm[openai]"
 ```
 
-That's it! The plugin is auto-discovered by pytest.
+Use `pytest-mockllm[anthropic]`, `pytest-mockllm[google]`, or
+`pytest-mockllm[langchain]` for the corresponding provider. The plugin is auto-discovered by pytest.
 
 ### Your First Test
 
@@ -102,11 +103,8 @@ OpenAI, Anthropic, Google Gemini — one consistent API.
 ### 🌊 Streaming Support
 Full support for streaming responses, just like the real APIs.
 
-### 🔧 LangChain & LlamaIndex
-Native integration with popular LLM frameworks.
-
-### 📼 Response Recording
-VCR-style recording for golden tests.
+### 🔧 LangChain
+Native integration with LangChain chat models.
 
 ### ⚡ Chaos Engineering
 Simulate rate limits, timeouts, and random latency jitter to test your app's resilience.
@@ -114,24 +112,18 @@ Simulate rate limits, timeouts, and random latency jitter to test your app's res
 ### 💰 Cost & Token Tracking
 Professional-grade token counting with `tiktoken` and built-in cost dashboard. See [Live Benchmarks](benchmarks/BENCHMARK.md).
 
-### 📼 Secure Recording
-VCR-style recording with automatic PII redaction (API keys, Bearer tokens).
-
 ### 🔒 Type Safe
 Full type hints and objects that match SDK structures perfectly.
 
 ---
 
-## 🆕 What's New in v0.2.2 "Battle-Hardened"
+## 🆕 What's New in v0.2.3 "Safety Hardening"
 
-This release hardens the library for high-concurrency and enterprise environments:
-- 🛡️ **Thread-Safety**: Global statistics are now locked for safe parallel testing with `pytest-xdist`.
-- ⚡ **Async Latency**: Non-blocking delays using `asyncio.sleep` for 100% async performance.
-- 🔒 **Enterprise Security**: Expanded PII redaction for Azure OpenAI and GCP.
-- 🚀 **True Async Support**: Real coroutines and async iterators for all providers.
-- 🎯 **Accurate Tokenizers**: High-fidelity counting with `tiktoken`.
-- 📊 **Cost Saved Dashboard**: Live ROI tracking in your terminal.
-- 🐍 **Next-Gen Support**: Verified compatibility with **Python 3.14**.
+- Fixed clean-install plugin loading by declaring the required PyYAML dependency.
+- Fixed LangChain structured output for sync, async, Pydantic, and `include_raw=True` callers.
+- Recording and replay now fail closed instead of silently falling through to live provider APIs.
+- CI now installs the built wheel in a clean environment and runs a pytest smoke test.
+- `--llm-strict` and the corresponding pytest configuration now apply to provider fixtures.
 
 ---
 
@@ -341,60 +333,10 @@ def test_catches_unconfigured_calls(mock_openai):
 
 ## 📼 Recording & Replay
 
-Record real API responses once, replay them forever — like VCR for LLMs.
-
-### Record Mode
-
-```python
-# First run: hits real API and saves response
-@pytest.mark.llm_record
-def test_with_recording(llm_recorder):
-    from openai import OpenAI
-    client = OpenAI()  # Uses real API key from environment
-    
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",  # Use cheap model for recording
-        messages=[{"role": "user", "content": "Say hello!"}]
-    )
-    
-    assert response.choices[0].message.content
-```
-
-Run with recording:
-```bash
-pytest tests/test_example.py --llm-record
-```
-
-### Replay Mode
-
-```python
-# Subsequent runs: uses saved response (no API key needed!)
-@pytest.mark.llm_replay
-def test_with_recording(llm_recorder):
-    # Same test code — but now uses cached response
-    # ...
-```
-
-### Cassette Storage
-
-Responses are saved in `tests/llm_cassettes/` as YAML:
-
-```yaml
-name: test_with_recording
-version: "1.0"
-created: 1703270400
-interactions:
-  - request:
-      model: gpt-4o-mini
-      messages:
-        - role: user
-          content: Say hello!
-    response:
-      content: "Hello! How can I assist you today?"
-      model: gpt-4o-mini
-    provider: openai
-    latency_ms: 523
-```
+Recording and replay are temporarily unavailable. Earlier releases exposed the interface
+without safely intercepting provider calls. Version 0.2.3 fails closed instead of allowing
+an apparent replay test to fall through to a live API. Use the deterministic provider fixtures
+until recording returns with provider-level behavioral tests.
 
 ---
 
@@ -403,15 +345,12 @@ interactions:
 ### CLI Options
 
 ```bash
-# Enable recording mode
-pytest --llm-record
-
-# Custom cassette directory
-pytest --llm-cassette-dir=my_cassettes
-
 # Strict mode (fail if any LLM call is unconfigured)
 pytest --llm-strict
 ```
+
+The reserved `--llm-record` and `--llm-cassette-dir` options currently fail closed when the
+`llm_recorder` fixture is used.
 
 ### Markers
 
@@ -421,13 +360,6 @@ def test_with_anthropic(mock_llm):
     # mock_llm is now an AnthropicMock
     pass
 
-@pytest.mark.llm_record
-def test_records_responses(llm_recorder):
-    pass
-
-@pytest.mark.llm_replay  
-def test_replays_responses(llm_recorder):
-    pass
 ```
 
 ### pytest.ini / pyproject.toml
@@ -454,7 +386,7 @@ llm_strict = true
 | Gemini support | ✅ Native | 🟡 Manual | ❌ | 🟡 HTTP |
 | Token counting | ✅ tiktoken | ❌ | ❌ | ❌ |
 | Cost Dashboard | ✅ | ❌ | ❌ | ❌ |
-| Recording/Replay | ✅ Redacted | ❌ | ❌ | ✅ |
+| Recording/Replay | 🚧 Fail-closed | ❌ | ❌ | ✅ |
 | Chaos Engineering| ✅ Jitter/Error| 🟡 Manual | 🟡 HTTP | ❌ |
 
 ---
@@ -465,7 +397,7 @@ llm_strict = true
 - [x] Professional Tokenizers (tiktoken)
 - [x] Terminal Cost Dashboard
 - [x] Chaos Engineering (Jitter)
-- [x] Secure Recording (PII Redaction)
+- [ ] Safe provider-level recording and replay
 - [ ] More providers (Cohere, Mistral)
 - [ ] pytest-xdist compatibility
 - [ ] Integration with LangSmith

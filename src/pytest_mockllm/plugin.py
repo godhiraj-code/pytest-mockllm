@@ -37,7 +37,7 @@ def pytest_addoption(parser: Parser) -> None:
     group.addoption(
         "--llm-cassette-dir",
         action="store",
-        default="tests/llm_cassettes",
+        default=None,
         help="Directory to store LLM response cassettes (default: tests/llm_cassettes)",
     )
 
@@ -46,6 +46,18 @@ def pytest_addoption(parser: Parser) -> None:
         action="store_true",
         default=False,
         help="Fail tests if no mock response is configured (strict mode)",
+    )
+
+    parser.addini(
+        "llm_cassette_dir",
+        "Directory to store LLM response cassettes",
+        default="tests/llm_cassettes",
+    )
+    parser.addini(
+        "llm_strict",
+        "Fail tests if no mock response is configured",
+        type="bool",
+        default=False,
     )
 
 

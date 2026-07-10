@@ -244,6 +244,15 @@ class LLMRecorder:
 
     def __enter__(self) -> LLMRecorder:
         """Start recording/replaying."""
+        if self.mode != "none":
+            raise RuntimeError(
+                "LLM recording and replay are temporarily unavailable because provider "
+                "interception is not yet implemented safely. pytest-mockllm refuses to "
+                "fall through to a live API. Use a provider mock fixture such as "
+                "mock_openai, or construct LLMRecorder(..., mode='none') for explicit "
+                "pass-through behavior."
+            )
+
         self._recording = self._should_record()
 
         if not self._recording and self.cassette_path.exists():

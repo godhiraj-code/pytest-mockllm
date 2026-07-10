@@ -93,6 +93,25 @@ def test_cli_options_registered(testdir):
     assert "--llm-strict" in result.stdout.str()
 
 
+def test_cli_strict_mode_applies_to_provider_fixture(testdir):
+    """The global strict option must change fixture behavior, not only appear in help."""
+    testdir.makepyfile(
+        """
+        import pytest
+
+        def test_unconfigured_call_fails(mock_openai):
+            with pytest.raises(RuntimeError, match="No mock response configured"):
+                mock_openai.client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": "hello"}],
+                )
+        """
+    )
+
+    result = testdir.runpytest("--llm-strict", "-q")
+    result.assert_outcomes(passed=1)
+
+
 def test_markers_registered(testdir):
     """Verify markers are registered."""
     result = testdir.runpytest("--markers")

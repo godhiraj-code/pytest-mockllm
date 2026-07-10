@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -78,6 +79,16 @@ jobs:
 
       - name: Check package
         run: twine check dist/*
+
+      - name: Smoke-test built wheel in a clean environment
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/mockllm-smoke"
+          "$RUNNER_TEMP/mockllm-smoke/bin/python" -m pip install dist/*.whl
+          mkdir -p "$RUNNER_TEMP/mockllm-smoke-test"
+          printf 'def test_plugin_loads():\n    assert True\n' > "$RUNNER_TEMP/mockllm-smoke-test/test_smoke.py"
+          cd "$RUNNER_TEMP/mockllm-smoke-test"
+          "$RUNNER_TEMP/mockllm-smoke/bin/python" -m pytest -q
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

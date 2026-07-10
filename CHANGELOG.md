@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-07-10
+
+### Fixed
+
+- Added the missing `PyYAML` runtime dependency so a base installation can load the pytest plugin.
+- Fixed LangChain structured output for sync, async, Pydantic, and `include_raw=True` callers.
+- Made unfinished recording and replay modes fail closed instead of silently allowing live API traffic.
+- Made `--llm-strict` and the `llm_strict` pytest setting apply to every provider fixture.
+- Added a clean-wheel pytest smoke test to CI to catch missing runtime dependencies.
+
+### Documentation
+
+- Replaced the absolute network-safety claim with the actual fixture-scoped guarantee.
+- Corrected provider installation examples and marked recording/replay as unavailable pending a safe implementation.
+
 ## [0.2.2] - 2025-12-22
 
 ### Added
@@ -60,5 +75,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - No external network calls in mock mode (completely isolated testing)
 
-[Unreleased]: https://github.com/godhiraj-code/pytest-mockllm/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/godhiraj-code/pytest-mockllm/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/godhiraj-code/pytest-mockllm/releases/tag/v0.2.3
 [0.1.0]: https://github.com/godhiraj-code/pytest-mockllm/releases/tag/v0.1.0

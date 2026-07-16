@@ -54,6 +54,7 @@ class MockResponse:
 
     # For streaming responses
     stream_chunks: list[str] | None = None
+    tool_call_chunks: list[str] | None = None
 
     # For function/tool calling
     tool_calls: list[dict[str, Any]] | None = None
@@ -75,6 +76,7 @@ class MockError:
     error_type: str  # "rate_limit", "timeout", "auth", "server", "invalid_request"
     message: str = ""
     after_calls: int = 0  # Trigger after N successful calls (0 = immediate)
+    times: int | None = None  # None repeats forever; an integer is deterministic.
 
     def __post_init__(self) -> None:
         error_messages = {
@@ -166,6 +168,11 @@ class MockLLM(ABC):
         return self._calls
 
     @property
+    def request_ledger(self) -> list[dict[str, Any]]:
+        """Ordered request evidence, including simulated outcomes."""
+        return self._calls
+
+    @property
     def call_count(self) -> int:
         """Number of API calls made to this mock."""
         return self._call_count
@@ -199,6 +206,7 @@ class MockLLM(ABC):
         latency_ms: int = 0,
         tool_calls: list[dict[str, Any]] | None = None,
         stream_chunks: list[str] | None = None,
+        tool_call_chunks: list[str] | None = None,
     ) -> MockLLM:
         """
         Add a response to the queue.
@@ -213,6 +221,7 @@ class MockLLM(ABC):
             latency_ms: Simulated latency in milliseconds
             tool_calls: Tool/function calls to include
             stream_chunks: For streaming, custom chunk splits
+            tool_call_chunks: Fragmented function arguments for tool-call streaming
 
         Returns:
             self for method chaining
@@ -227,6 +236,7 @@ class MockLLM(ABC):
             latency_ms=latency_ms,
             tool_calls=tool_calls,
             stream_chunks=stream_chunks,
+            tool_call_chunks=tool_call_chunks,
         )
         self._responses.append(response)
         return self
@@ -258,6 +268,7 @@ class MockLLM(ABC):
         *,
         message: str = "",
         after_calls: int = 0,
+        times: int | None = None,
     ) -> MockLLM:
         """
         Configure the mock to simulate an API error.
@@ -266,6 +277,7 @@ class MockLLM(ABC):
             error_type: One of "rate_limit", "timeout", "auth", "server", "invalid_request"
             message: Custom error message (uses default if not provided)
             after_calls: Number of successful calls before error (0 = immediate)
+            times: Number of times to raise before recovering (None = forever)
 
         Example:
             >>> mock.simulate_error("rate_limit", after_calls=5)
@@ -274,6 +286,7 @@ class MockLLM(ABC):
             error_type=error_type,
             message=message,
             after_calls=after_calls,
+            times=times,
         )
         return self
 
@@ -316,7 +329,14 @@ class MockLLM(ABC):
         """
         # Check for error simulation
         if self._error and self._call_count >= self._error.after_calls:
-            self._raise_provider_error(self._error)
+            error = self._error
+            if self._calls:
+                self._calls[-1]["outcome"] = error.error_type
+            if error.times is not None:
+                error.times -= 1
+                if error.times <= 0:
+                    self._error = None
+            self._raise_provider_error(error)
 
         # Try to get from queue
         if self._response_index < len(self._responses):
@@ -370,17 +390,19 @@ class MockLLM(ABC):
             )
 
         self._call_count += 1
+        if self._calls:
+            self._calls[-1]["outcome"] = "success"
         return response
 
-    def _record_call(self, **kwargs: Any) -> None:
+    def _record_call(self, **kwargs: Any) -> dict[str, Any]:
         """Record an API call for later inspection."""
-        self._calls.append(
-            {
-                "call_number": self._call_count + 1,
-                "timestamp": time.time(),
-                **kwargs,
-            }
-        )
+        entry = {
+            "call_number": len(self._calls) + 1,
+            "timestamp": time.time(),
+            **kwargs,
+        }
+        self._calls.append(entry)
+        return entry
 
     def _get_delay_ms(self, response: MockResponse) -> int:
         """Calculate total delay (base latency + jitter) in milliseconds."""

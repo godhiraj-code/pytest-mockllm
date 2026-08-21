@@ -74,17 +74,20 @@ class OpenAIMock(MockLLM):
 
             error_class = error_classes.get(error.error_type, APIError)
 
-            # Create mock response for error
-            mock_response = MagicMock()
-            mock_response.status_code = {
+            import httpx
+
+            status_code = {
                 "rate_limit": 429,
                 "auth": 401,
                 "timeout": 408,
                 "server": 500,
                 "invalid_request": 400,
             }.get(error.error_type, 500)
-            mock_response.headers = {}
-            mock_response.json.return_value = {"error": {"message": error.message}}
+            mock_response = httpx.Response(
+                status_code,
+                request=httpx.Request("POST", "https://api.openai.com/v1/mock"),
+                json={"error": {"message": error.message}},
+            )
 
             raise error_class(
                 message=error.message,
@@ -106,6 +109,61 @@ class OpenAIMock(MockLLM):
 
         # Build the response object
         return self._build_completion_response(response, model)
+
+    def _create_response(self, *, text_format: type[Any] | None = None, **kwargs: Any) -> Any:
+        """Create an official Responses API object, optionally with parsed output."""
+        call_type = "responses.parse" if text_format is not None else "responses.create"
+        self._record_call(type=call_type, text_format=text_format, **kwargs)
+        model = kwargs.get("model", self._default_model)
+        response = self._get_next_response(model=model)
+        self._simulate_delay(self._get_delay_ms(response))
+
+        from openai.types.responses import (
+            ParsedResponse,
+            ParsedResponseOutputMessage,
+            ParsedResponseOutputText,
+            Response,
+            ResponseOutputMessage,
+            ResponseOutputText,
+        )
+
+        common = {
+            "id": response.id,
+            "created_at": time.time(),
+            "model": model,
+            "object": "response",
+            "parallel_tool_calls": False,
+            "tool_choice": "auto",
+            "tools": [],
+            "status": "completed",
+        }
+        if text_format is not None:
+            from pydantic import TypeAdapter
+
+            parsed = TypeAdapter(text_format).validate_json(response.content)
+            parsed_output_text = ParsedResponseOutputText[Any](
+                annotations=[], type="output_text", text=response.content, parsed=parsed
+            )
+            parsed_output_message = ParsedResponseOutputMessage[Any](
+                id=f"msg_{response.id}",
+                content=[parsed_output_text],
+                role="assistant",
+                status="completed",
+                type="message",
+            )
+            return ParsedResponse[Any](output=[parsed_output_message], **common)
+
+        output_text = ResponseOutputText(
+            annotations=[], type="output_text", text=response.content
+        )
+        output_message = ResponseOutputMessage(
+            id=f"msg_{response.id}",
+            content=[output_text],
+            role="assistant",
+            status="completed",
+            type="message",
+        )
+        return Response(output=[output_message], **common)
 
     def _build_completion_response(self, response: MockResponse, model: str) -> Any:
         """Build an OpenAI-style ChatCompletion response object."""
@@ -216,9 +274,21 @@ class OpenAIMock(MockLLM):
 
     async def _create_async_streaming_completion(self, **kwargs: Any) -> AsyncIterator[Any]:
         """Create an async streaming chat completion response."""
-        self._record_call(type="chat.completions.create", stream=True, **kwargs)
+        request = {**kwargs, "stream": True}
+        self._record_call(type="chat.completions.create", **request)
         model = kwargs.get("model", self._default_model)
         response = self._get_next_response(model=model)
+
+        if response.tool_calls and response.tool_call_chunks:
+            for i, arguments in enumerate(response.tool_call_chunks):
+                yield self._build_tool_stream_chunk(
+                    response=response,
+                    model=model,
+                    arguments=arguments,
+                    is_first=i == 0,
+                    is_last=i == len(response.tool_call_chunks) - 1,
+                )
+            return
 
         if response.stream_chunks:
             chunks = response.stream_chunks
@@ -237,9 +307,21 @@ class OpenAIMock(MockLLM):
 
     def _create_streaming_completion(self, **kwargs: Any) -> Iterator[Any]:
         """Create a streaming chat completion response."""
-        self._record_call(type="chat.completions.create", stream=True, **kwargs)
+        request = {**kwargs, "stream": True}
+        self._record_call(type="chat.completions.create", **request)
         model = kwargs.get("model", self._default_model)
         response = self._get_next_response(model=model)
+
+        if response.tool_calls and response.tool_call_chunks:
+            for i, arguments in enumerate(response.tool_call_chunks):
+                yield self._build_tool_stream_chunk(
+                    response=response,
+                    model=model,
+                    arguments=arguments,
+                    is_first=i == 0,
+                    is_last=i == len(response.tool_call_chunks) - 1,
+                )
+            return
 
         # Split content into chunks
         if response.stream_chunks:
@@ -257,6 +339,50 @@ class OpenAIMock(MockLLM):
                 is_last=(i == len(chunks) - 1),
                 response_id=response.id,
             )
+
+    def _build_tool_stream_chunk(
+        self,
+        *,
+        response: MockResponse,
+        model: str,
+        arguments: str,
+        is_first: bool,
+        is_last: bool,
+    ) -> Any:
+        """Build an official chunk containing one function-argument fragment."""
+        from openai.types.chat import ChatCompletionChunk
+        from openai.types.chat.chat_completion_chunk import (
+            Choice,
+            ChoiceDelta,
+            ChoiceDeltaToolCall,
+            ChoiceDeltaToolCallFunction,
+        )
+
+        if not response.tool_calls:
+            raise ValueError("A tool call is required to build a tool stream chunk")
+        tool_call = response.tool_calls[0]
+        delta_tool_call = ChoiceDeltaToolCall(
+            index=0,
+            id=tool_call.get("id") if is_first else None,
+            type="function" if is_first else None,
+            function=ChoiceDeltaToolCallFunction(
+                name=tool_call["function"]["name"] if is_first else None,
+                arguments=arguments,
+            ),
+        )
+        return ChatCompletionChunk(
+            id=response.id,
+            choices=[
+                Choice(
+                    index=0,
+                    delta=ChoiceDelta(tool_calls=[delta_tool_call]),
+                    finish_reason="tool_calls" if is_last else None,
+                )
+            ],
+            created=int(time.time()),
+            model=model,
+            object="chat.completion.chunk",
+        )
 
     def _build_stream_chunk(
         self,
@@ -345,8 +471,7 @@ class OpenAIMock(MockLLM):
             return mock
 
     def __enter__(self) -> OpenAIMock:
-        """Start mocking OpenAI API calls."""
-        # Create the sync mock client
+        """Patch SDK resource methods and block every unhandled OpenAI request."""
         mock_client = MagicMock()
 
         def create_chat(*args: Any, **kwargs: Any) -> Any:
@@ -354,38 +479,61 @@ class OpenAIMock(MockLLM):
                 return self._create_streaming_completion(**kwargs)
             return self._create_chat_completion(**kwargs)
 
-        mock_client.chat.completions.create = create_chat
-        mock_client.embeddings.create = lambda **kw: self._create_embedding(**kw)
+        def create_response(*args: Any, **kwargs: Any) -> Any:
+            return self._create_response(**kwargs)
 
-        # Create the async mock client
-        async_mock_client = MagicMock()
+        def parse_response(*args: Any, **kwargs: Any) -> Any:
+            text_format = kwargs.pop("text_format")
+            return self._create_response(text_format=text_format, **kwargs)
 
         async def create_async_chat(*args: Any, **kwargs: Any) -> Any:
             if kwargs.get("stream", False):
                 return self._create_async_streaming_completion(**kwargs)
             return await self._create_async_chat_completion(**kwargs)
 
-        # Using MagicMock but with async function assignments
-        async_mock_client.chat.completions.create = create_async_chat
+        async def create_async_response(*args: Any, **kwargs: Any) -> Any:
+            return self._create_response(**kwargs)
 
-        async def create_async_embedding(**kw: Any) -> Any:
-            return self._create_embedding(**kw)
+        async def parse_async_response(*args: Any, **kwargs: Any) -> Any:
+            text_format = kwargs.pop("text_format")
+            return self._create_response(text_format=text_format, **kwargs)
 
-        async_mock_client.embeddings.create = create_async_embedding
+        async def create_async_embedding(*args: Any, **kwargs: Any) -> Any:
+            return self._create_embedding(**kwargs)
 
-        # Patch the OpenAI client
-        try:
-            patcher = patch("openai.OpenAI", return_value=mock_client)
+        def blocked_request(*args: Any, **kwargs: Any) -> Any:
+            raise RuntimeError("OpenAI network blocked by active mock_openai fixture")
+
+        async def blocked_async_request(*args: Any, **kwargs: Any) -> Any:
+            raise RuntimeError("OpenAI network blocked by active mock_openai fixture")
+
+        targets = [
+            ("openai.resources.chat.completions.Completions.create", create_chat),
+            ("openai.resources.chat.completions.AsyncCompletions.create", create_async_chat),
+            ("openai.resources.responses.Responses.create", create_response),
+            ("openai.resources.responses.Responses.parse", parse_response),
+            ("openai.resources.responses.AsyncResponses.create", create_async_response),
+            ("openai.resources.responses.AsyncResponses.parse", parse_async_response),
+            ("openai.resources.embeddings.Embeddings.create", self._create_embedding),
+            ("openai.resources.embeddings.AsyncEmbeddings.create", create_async_embedding),
+            ("openai._base_client.SyncAPIClient.request", blocked_request),
+            ("openai._base_client.AsyncAPIClient.request", blocked_async_request),
+        ]
+        for target, replacement in targets:
+            patcher = patch(target, new=replacement)
             self._patches.append(patcher)
             patcher.start()
 
-            # Also patch AsyncOpenAI
-            async_patcher = patch("openai.AsyncOpenAI", return_value=async_mock_client)
-            self._patches.append(async_patcher)
-            async_patcher.start()
-        except Exception:
-            # openai not installed - that's fine, we'll use the mock anyway
-            pass
+        mock_client.chat.completions.create = create_chat
+        mock_client.responses.create = create_response
+        mock_client.responses.parse = parse_response
+        mock_client.embeddings.create = self._create_embedding
+
+        async_mock_client = MagicMock()
+        async_mock_client.chat.completions.create = create_async_chat
+        async_mock_client.responses.create = create_async_response
+        async_mock_client.responses.parse = parse_async_response
+        async_mock_client.embeddings.create = create_async_embedding
 
         self._mock_client = mock_client
         self._async_mock_client = async_mock_client

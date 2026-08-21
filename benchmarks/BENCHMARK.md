@@ -3,9 +3,9 @@
 | Metric | Value |
 | :--- | :--- |
 | **Batch Size** | 50 LLM Calls |
-| **Mock Execution Time** | 0.80 ms |
+| **Mock Execution Time** | 0.78 ms |
 | **Est. Real API Time** | 75.00 s |
-| **Speedup Factor** | ~93,287x |
+| **Speedup Factor** | ~95,632x |
 | **Total Cost Saved** | $0.2750 |
 | **Total Time Saved** | 75.00 s |
 
@@ -13,4 +13,4 @@
 - 💵 **Est. Money Saved**: $275.00
 - ⏳ **Est. Time Saved**: 20.8 hours
 
-*Generated on: 2026-07-10 15:46:15 UTC*
+*Generated on: 2026-08-21 14:04:02 UTC*

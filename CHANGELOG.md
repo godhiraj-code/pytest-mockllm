@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-21
+
+### Added
+
+- **OpenAI Responses API support**: mocked `responses.create` and `responses.parse` with official typed objects, including structured output via Pydantic models.
+- **Fragmented tool-call streaming**: `tool_call_chunks` streams function arguments across chunks exactly like the real API, sync and async.
+- **Deterministic error budgets**: `simulate_error(..., times=N)` raises a fixed number of times before recovering, enabling deterministic 429-to-success retry tests.
+- **Request ledger**: `mock.request_ledger` records ordered request evidence with simulated outcomes (`success`, `rate_limit`, ...) for assertions and debugging.
+- **Anthropic stream disconnect simulation**: `simulate_stream_disconnect` raises a real `APIConnectionError` mid-stream after N events.
+- **SDK contract acceptance tests** for OpenAI and Anthropic proving fixture-scoped zero network egress against a counting localhost transport.
+
+### Hardened
+
+- Provider mocks now patch SDK resource methods (`openai.resources.*`, Anthropic equivalents) so every supported call path is intercepted.
+- Unhandled provider SDK requests raise immediately instead of silently reaching the network, including clients created before the fixture activates.
+
+### Fixed
+
+- Bounded the `anthropic` extra to `<1.0`: the Anthropic SDK 1.0 release migrated to `httpx2` and rejects `httpx` clients, which broke fresh installs of the previous unbounded range. Anthropic 1.x support is tracked as follow-up work.
+- mypy configuration updated to Python 3.10 so type-checking runs again (current mypy no longer accepts 3.9 targets).
+
 ## [0.2.3] - 2026-07-10
 
 ### Fixed

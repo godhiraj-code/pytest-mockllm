@@ -151,21 +151,10 @@ class PIIRedactor:
 
 
 class LLMRecorder:
-    """
-    Record and replay LLM API calls.
+    """Fail-closed placeholder for recording and replay.
 
-    Modes:
-        - "auto": Replay if cassette exists, otherwise record
-        - "record": Always record (overwrites existing cassettes)
-        - "replay": Always replay (fails if cassette missing)
-        - "none": Disable recording (pass through to real APIs)
-
-    Example:
-        >>> recorder = LLMRecorder(cassette_path=Path("tests/cassettes/my_test.yaml"))
-        >>> with recorder:
-        ...     # First run: records real API call
-        ...     # Later runs: replays recorded response
-        ...     response = openai_client.chat.completions.create(...)
+    ``auto``, ``record``, and ``replay`` raise on entry until safe provider interception is
+    implemented. ``none`` is the only pass-through mode and must be selected explicitly.
     """
 
     def __init__(

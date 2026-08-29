@@ -31,7 +31,7 @@ def pytest_addoption(parser: Parser) -> None:
         "--llm-record",
         action="store_true",
         default=False,
-        help="Record LLM API responses for replay (creates cassettes)",
+        help="Reserved for recording support; currently fails closed",
     )
 
     group.addoption(
@@ -70,11 +70,11 @@ def pytest_configure(config: Config) -> None:
     )
     config.addinivalue_line(
         "markers",
-        "llm_record: Record real LLM responses for this test (requires API keys)",
+        "llm_record: Reserved for recording support; currently fails closed",
     )
     config.addinivalue_line(
         "markers",
-        "llm_replay: Replay recorded LLM responses (fails if cassette missing)",
+        "llm_replay: Reserved for replay support; currently fails closed",
     )
 
 
@@ -115,12 +115,10 @@ def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: Any)
         f"{GLOBAL_STATS.total_prompt_tokens + GLOBAL_STATS.total_completion_tokens:<10}"
     )
 
-    # The HERO metric: Cost Saved
+    # Estimated cost avoided by configured mock responses
     cost_str = f"${GLOBAL_STATS.total_cost_saved:,.4f}"
     terminalreporter.write_line("")
-    terminalreporter.write_sep(
-        "=", f" 💎 Total Estimated Cost Saved: {cost_str} 💎 ", bold=True, blue=True
-    )
+    terminalreporter.write_sep("=", f"Total Estimated Cost Saved: {cost_str}", bold=True, blue=True)
     terminalreporter.write_line("")
 
 

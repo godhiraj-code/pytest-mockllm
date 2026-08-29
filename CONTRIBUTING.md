@@ -1,10 +1,10 @@
 # Contributing to pytest-mockllm
 
-First off, thank you for considering contributing to pytest-mockllm! 🎉
+Thank you for considering contributing to pytest-mockllm.
 
 ## How Can I Contribute?
 
-### 🐛 Reporting Bugs
+### Reporting Bugs
 
 1. **Check existing issues** to see if the bug has already been reported
 2. **Create a new issue** with:
@@ -13,13 +13,13 @@ First off, thank you for considering contributing to pytest-mockllm! 🎉
    - Expected vs actual behavior
    - Python version, OS, and package versions
 
-### 💡 Suggesting Features
+### Suggesting Features
 
 1. **Open a discussion** first for major features
 2. **Create an issue** with the `enhancement` label
 3. Explain the use case and why it would benefit others
 
-### 🔧 Pull Requests
+### Pull Requests
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/amazing-feature`

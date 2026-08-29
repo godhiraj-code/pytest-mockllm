@@ -190,27 +190,11 @@ def mock_langchain():
 @pytest.fixture
 def llm_recorder(request: FixtureRequest) -> Generator[LLMRecorder, None, None]:
     """
-    Record and replay LLM API responses (VCR-style).
+    Reserved recording/replay fixture.
 
-    On first run, makes real API calls and saves responses to cassettes.
-    On subsequent runs, replays saved responses without network access.
-
-    Requires actual API keys for recording mode.
-
-    Example:
-        >>> @pytest.mark.llm_record
-        ... def test_with_recording(llm_recorder):
-        ...     # First run: hits real API, saves response
-        ...     # Subsequent runs: uses saved response
-        ...
-        ...     from openai import OpenAI
-        ...     client = OpenAI()  # Uses real API key
-        ...     response = client.chat.completions.create(
-        ...         model="gpt-4o-mini",
-        ...         messages=[{"role": "user", "content": "Say hello!"}]
-        ...     )
-        ...
-        ...     assert response.choices[0].message.content
+    Provider interception is not implemented for this fixture, so record, replay, and auto
+    modes raise before test code can reach a provider. Use a provider fixture such as
+    ``mock_openai`` for deterministic offline tests.
     """
     # Get cassette directory from config or use default
     cassette_dir = request.config.getoption("--llm-cassette-dir") or request.config.getini(

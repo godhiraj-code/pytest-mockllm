@@ -254,16 +254,17 @@ class GeminiMock(MockLLM):
         mock_module.configure = MagicMock()
 
         try:
-            patcher = patch.dict("sys.modules", {"google.generativeai": mock_module})
-            self._patches.append(patcher)
-            patcher.start()
-
-            # Also patch if already imported
-            import_patcher = patch("google.generativeai.GenerativeModel", mock_model_class)
-            self._patches.append(import_patcher)
-            import_patcher.start()
-        except Exception:
-            pass
+            import google.generativeai as genai
+        except ImportError:
+            module_patcher = patch.dict("sys.modules", {"google.generativeai": mock_module})
+            self._patches.append(module_patcher)
+            module_patcher.start()
+        else:
+            # Patch the real module object so imports performed before fixture activation
+            # observe the replacement too.
+            model_patcher = patch.object(genai, "GenerativeModel", mock_model_class)
+            self._patches.append(model_patcher)
+            model_patcher.start()
 
         self._mock_module = mock_module
         return self

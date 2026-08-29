@@ -35,7 +35,7 @@ async def benchmark_mock():
     completion_tokens = 50 * 500
     cost_saved = estimate_cost("gpt-4o", prompt_tokens, completion_tokens)
     
-    report = f"""# 🚀 Performance & ROI Benchmark
+    report = f"""# Performance and ROI Benchmark
 
 | Metric | Value |
 | :--- | :--- |
@@ -46,9 +46,9 @@ async def benchmark_mock():
 | **Total Cost Saved** | ${cost_saved:.4f} |
 | **Total Time Saved** | {real_duration - mock_duration:.2f} s |
 
-## 📈 Projected Savings (1,000 builds)
-- 💵 **Est. Money Saved**: ${cost_saved * 1000:,.2f}
-- ⏳ **Est. Time Saved**: {time_saved_hours * 1000:.1f} hours
+## Projected Savings (1,000 builds)
+- **Est. Money Saved**: ${cost_saved * 1000:,.2f}
+- **Est. Time Saved**: {time_saved_hours * 1000:.1f} hours
 
 *Generated on: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}*
 """

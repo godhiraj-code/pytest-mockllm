@@ -3,6 +3,8 @@ Tests that verify the pytest plugin registration and fixtures work correctly.
 These tests use pytester to test the pytest integration itself.
 """
 
+from importlib.metadata import requires
+
 import pytest
 
 
@@ -119,3 +121,13 @@ def test_markers_registered(testdir):
     assert "llm_mock" in result.stdout.str()
     assert "llm_record" in result.stdout.str()
     assert "llm_replay" in result.stdout.str()
+
+
+def test_langchain_extra_installs_documented_provider_package():
+    """The langchain extra must make the documented ChatOpenAI import available."""
+    requirements = requires("pytest-mockllm") or []
+
+    assert any(
+        requirement.startswith("langchain-openai") and "extra == 'langchain'" in requirement
+        for requirement in requirements
+    )

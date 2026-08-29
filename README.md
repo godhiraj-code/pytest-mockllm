@@ -1,7 +1,7 @@
-<h1 align="center">🧪 pytest-mockllm</h1>
+<h1 align="center">pytest-mockllm</h1>
 
 <p align="center">
-  <strong>🚀 Zero-config LLM mocking for pytest — Test AI apps without the AI bills</strong>
+  <strong>Fixture-scoped LLM mocking for pytest</strong>
 </p>
 
 <p align="center">
@@ -13,137 +13,124 @@
 </p>
 
 <p align="center">
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-features">Features</a> •
-  <a href="#-providers">Providers</a> •
-  <a href="#-examples">Examples</a> •
-  <a href="#-recording--replay">Recording</a> •
-  <a href="#-configuration">Configuration</a>
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#supported-integrations">Supported Integrations</a> •
+  <a href="#examples">Examples</a> •
+  <a href="#recording-and-replay">Recording</a> •
+  <a href="#configuration">Configuration</a>
 </p>
 
 ---
 
 > [!IMPORTANT]
-> **Fixture-scoped interception:** Calls made through an active provider fixture such as
+> **Interception is fixture-scoped.** Calls made through an active provider fixture such as
 > `mock_openai` are intercepted locally. Installing the plugin alone does not block network
-> access from tests that do not use a mock fixture. Keep real API keys out of unit-test
+> access from tests that do not request a mock fixture. Keep real API keys out of unit-test
 > environments and use normal CI egress controls as a second safety layer.
 
 ## Why pytest-mockllm?
 
-Testing LLM applications is **painful**:
-
-- 💸 **Expensive** — Every test run burns API credits
-- 🐢 **Slow** — API calls add seconds to your test suite  
-- 🎲 **Non-deterministic** — Same input, different output = flaky tests
-- 🔒 **Requires API keys** — CI needs secrets, local dev needs setup
-
-**pytest-mockllm** fixes all of this with **zero configuration**:
+Provider calls make unit tests slower, non-deterministic, dependent on secrets, and potentially
+costly. `pytest-mockllm` supplies auto-discovered pytest fixtures that return configured responses
+and record call details without contacting the provider on supported fixture paths.
 
 ```python
-# Just use the fixture — it works immediately!
 def test_my_chatbot(mock_openai):
     mock_openai.add_response("Hello! I'm here to help.")
-    
+
     response = my_chatbot.chat("Hi there!")
-    
+
     assert "help" in response.lower()
     assert mock_openai.call_count == 1
 ```
 
-No setup. No API keys. No costs. **Just fast, reliable tests.**
-
----
-
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
+
+Install the extra for the SDK used by your test:
 
 ```bash
 pip install "pytest-mockllm[openai]"
 ```
 
-Use `pytest-mockllm[anthropic]`, `pytest-mockllm[google]`, or
-`pytest-mockllm[langchain]` for the corresponding provider. The plugin is auto-discovered by pytest.
+Available extras are:
+
+```bash
+pip install "pytest-mockllm[anthropic]"
+pip install "pytest-mockllm[google]"
+pip install "pytest-mockllm[langchain]"
+```
+
+The `langchain` extra includes `langchain-core` and `langchain-openai`, which are required by the
+LangChain example below. Use `pytest-mockllm[all]` to install every supported integration. A base
+`pip install pytest-mockllm` installs the pytest plugin and its core runtime dependencies, but not
+the optional provider SDKs.
+
+The plugin is discovered automatically through its `pytest11` entry point; no `pytest_plugins`
+setting or fixture import is required.
 
 ### Your First Test
 
 ```python
 def test_customer_support_bot(mock_openai):
-    # Configure the mock response
-    mock_openai.add_response("I can help you with your order. What's your order number?")
-    
-    # Your actual code that uses OpenAI
+    mock_openai.add_response("I can help with your order. What's your order number?")
+
     from openai import OpenAI
-    client = OpenAI(api_key="fake-key")  # Key doesn't matter!
-    
+
+    client = OpenAI(api_key="fixture-only")
     response = client.chat.completions.create(
         model="gpt-4o",
-        messages=[{"role": "user", "content": "I need help with my order"}]
+        messages=[{"role": "user", "content": "I need help with my order"}],
     )
-    
-    # Assert on the response
+
     assert "order number" in response.choices[0].message.content.lower()
-    
-    # Assert on what was called
     assert mock_openai.call_count == 1
     assert mock_openai.last_call["model"] == "gpt-4o"
 ```
 
----
+The placeholder key only satisfies the SDK constructor. The active fixture intercepts the
+supported call before transport.
 
-## ✨ Features
+## Supported Integrations
 
-### 🎯 Zero Configuration
-Fixtures are auto-discovered. Just use them.
+| Fixture | Install extra | Intercepted interfaces |
+|---|---|---|
+| `mock_openai` | `openai` | Chat Completions, Responses create/parse, embeddings; sync/async; chat streaming and tool-call chunks |
+| `mock_anthropic` | `anthropic` | Messages; sync/async; text and tool-use streaming |
+| `mock_gemini` | `google` | `GenerativeModel.generate_content`, async generation, streaming, and chat sessions |
+| `mock_langchain` | `langchain` | Installed ChatOpenAI-compatible classes plus direct mock model `invoke`, `ainvoke`, `stream`, `astream`, and structured output |
+| `mock_llm` | matching provider extra | OpenAI by default; select `openai`, `anthropic`, or `gemini` with `@pytest.mark.llm_mock` |
 
-### 🤖 Multi-Provider Support
-OpenAI, Anthropic, Google Gemini — one consistent API.
+OpenAI and Anthropic supported paths return official SDK response/event objects when their SDKs
+are installed. Their active fixtures also block unhandled requests at the SDK base-request layer,
+including requests from clients created before fixture activation. Gemini and LangChain replace
+the supported high-level entry points listed above; they are not global network guards for every
+function exposed by those libraries.
 
-### 🌊 Streaming Support
-Full support for streaming responses, just like the real APIs.
+The `google` extra currently targets the legacy `google-generativeai` package. That upstream SDK is
+deprecated; support for its replacement, `google-genai`, has not been implemented yet.
 
-### 🔧 LangChain
-Native integration with LangChain chat models.
+All fixtures support queued deterministic responses, strict mode, call tracking, token/cost
+estimates, and deterministic error simulation. Response fidelity is limited to the interfaces in
+the table; this package does not claim complete coverage of every provider API.
 
-### ⚡ Chaos Engineering
-Simulate rate limits, timeouts, and random latency jitter to test your app's resilience.
-
-### 💰 Cost & Token Tracking
-Professional-grade token counting with `tiktoken` and built-in cost dashboard. See [Live Benchmarks](benchmarks/BENCHMARK.md).
-
-### 🔒 Type Safe
-Full type hints and objects that match SDK structures perfectly.
-
----
-
-## 🆕 What's New in v0.2.3 "Safety Hardening"
-
-- Fixed clean-install plugin loading by declaring the required PyYAML dependency.
-- Fixed LangChain structured output for sync, async, Pydantic, and `include_raw=True` callers.
-- Recording and replay now fail closed instead of silently falling through to live provider APIs.
-- CI now installs the built wheel in a clean environment and runs a pytest smoke test.
-- `--llm-strict` and the corresponding pytest configuration now apply to provider fixtures.
-
----
-
-## 🤖 Providers
+## Provider Examples
 
 ### OpenAI
 
 ```python
 def test_openai(mock_openai):
     mock_openai.add_response("The answer is 42")
-    
-    # Works with the official OpenAI SDK
+
     from openai import OpenAI
-    client = OpenAI(api_key="fake")
-    
+
+    client = OpenAI(api_key="fixture-only")
     response = client.chat.completions.create(
         model="gpt-4o",
-        messages=[{"role": "user", "content": "What is the meaning of life?"}]
+        messages=[{"role": "user", "content": "What is the meaning of life?"}],
     )
-    
+
     assert response.choices[0].message.content == "The answer is 42"
 ```
 
@@ -152,16 +139,16 @@ def test_openai(mock_openai):
 ```python
 def test_anthropic(mock_anthropic):
     mock_anthropic.add_response("I'd be happy to help!")
-    
+
     from anthropic import Anthropic
-    client = Anthropic(api_key="fake")
-    
+
+    client = Anthropic(api_key="fixture-only")
     response = client.messages.create(
         model="claude-3-5-sonnet-20241022",
         max_tokens=1024,
-        messages=[{"role": "user", "content": "Hello Claude!"}]
+        messages=[{"role": "user", "content": "Hello Claude!"}],
     )
-    
+
     assert "happy" in response.content[0].text
 ```
 
@@ -170,12 +157,12 @@ def test_anthropic(mock_anthropic):
 ```python
 def test_gemini(mock_gemini):
     mock_gemini.add_response("Here's what I found...")
-    
+
     import google.generativeai as genai
+
     model = genai.GenerativeModel("gemini-1.5-pro")
-    
     response = model.generate_content("Tell me about AI")
-    
+
     assert "found" in response.text
 ```
 
@@ -184,44 +171,34 @@ def test_gemini(mock_gemini):
 ```python
 def test_langchain(mock_langchain):
     mock_langchain.add_response("Paris is the capital of France.")
-    
-    from langchain_openai import ChatOpenAI
+
     from langchain_core.prompts import ChatPromptTemplate
-    
-    llm = ChatOpenAI(model="gpt-4o", api_key="fake")
+    from langchain_openai import ChatOpenAI
+
+    llm = ChatOpenAI(model="gpt-4o", api_key="fixture-only")
     prompt = ChatPromptTemplate.from_template("What is the capital of {country}?")
     chain = prompt | llm
-    
+
     result = chain.invoke({"country": "France"})
-    
+
     assert "Paris" in result.content
 ```
 
----
+## Examples
 
-## 📚 Examples
-
-### Multiple Responses (Conversation)
+### Multiple Responses
 
 ```python
 def test_conversation(mock_openai):
     mock_openai.add_responses(
         "Hi! How can I help you today?",
-        "I can definitely help with that order.",
-        "Your order has been updated. Anything else?",
+        "I can help with that order.",
+        "Your order has been updated.",
     )
-    
-    # First call
-    response1 = chatbot.send("Hello")
-    assert "help" in response1
-    
-    # Second call
-    response2 = chatbot.send("I need to change my order")  
-    assert "order" in response2
-    
-    # Third call
-    response3 = chatbot.send("Change quantity to 5")
-    assert "updated" in response3
+
+    assert "help" in chatbot.send("Hello")
+    assert "order" in chatbot.send("I need to change my order")
+    assert "updated" in chatbot.send("Change quantity to 5")
 ```
 
 ### Streaming Responses
@@ -229,32 +206,29 @@ def test_conversation(mock_openai):
 ```python
 def test_streaming(mock_openai):
     mock_openai.add_response("This is a streaming response that comes in chunks")
-    
+
     from openai import OpenAI
-    client = OpenAI(api_key="fake")
-    
+
+    client = OpenAI(api_key="fixture-only")
     stream = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": "Tell me a story"}],
         stream=True,
     )
-    
-    full_response = ""
-    for chunk in stream:
-        if chunk.choices[0].delta.content:
-            full_response += chunk.choices[0].delta.content
-    
+
+    full_response = "".join(
+        chunk.choices[0].delta.content or ""
+        for chunk in stream
+    )
     assert "streaming" in full_response
 ```
 
-### Function/Tool Calling
+### Function and Tool Calling
 
 ```python
 def test_function_calling(mock_openai):
-    from pytest_mockllm.core import MockResponse
-    
-    mock_openai._responses.append(MockResponse(
-        content="",
+    mock_openai.add_response(
+        "",
         tool_calls=[{
             "id": "call_123",
             "function": {
@@ -262,180 +236,135 @@ def test_function_calling(mock_openai):
                 "arguments": {"location": "San Francisco", "unit": "celsius"},
             },
         }],
-    ))
-    
-    # Your function-calling logic here
-    # ...
-    
-    assert mock_openai.last_call is not None
+    )
+
+    from openai import OpenAI
+
+    client = OpenAI(api_key="fixture-only")
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": "What's the weather?"}],
+    )
+
+    tool_call = response.choices[0].message.tool_calls[0]
+    assert tool_call.function.name == "get_weather"
+    assert mock_openai.last_call["model"] == "gpt-4o"
 ```
 
-### Token Usage & Cost Assertions
+### Token Usage and Cost Assertions
 
 ```python
 def test_stays_within_budget(mock_openai):
     from pytest_mockllm.core import TokenUsage, estimate_cost
-    
+
     mock_openai.add_response(
         "A detailed response...",
         token_usage=TokenUsage(prompt_tokens=500, completion_tokens=1000),
     )
-    
-    # Your LLM call here
-    result = my_function()
-    
-    # Assert token usage
+
+    my_function()
+
     assert mock_openai.total_tokens < 2000
-    assert mock_openai.total_completion_tokens < 1500
-    
-    # Assert cost (for gpt-4o)
     cost = estimate_cost(
         "gpt-4o",
         mock_openai.total_prompt_tokens,
         mock_openai.total_completion_tokens,
     )
-    assert cost < 0.05  # Less than 5 cents
+    assert cost < 0.05
 ```
 
-### Error Simulation (Chaos Testing)
+### Error Simulation
 
 ```python
 def test_handles_rate_limit(mock_openai):
-    mock_openai.simulate_error("rate_limit", after_calls=2)
-    mock_openai.add_responses("OK", "OK")
-    
-    # First two calls succeed, third fails
-    # ...
+    mock_openai.simulate_error("rate_limit", times=1)
+    mock_openai.add_response("recovered")
+
+    # The first supported provider call raises a provider-style rate-limit error.
+    # The next call returns "recovered".
+
 
 def test_handles_jitter(mock_openai):
-    # Add up to 500ms random latency to every call
     mock_openai.simulate_jitter(max_ms=500)
-    # ...
+
 
 def test_random_failures(mock_openai):
-    # 10% chance of random "server" or "rate_limit" error
     mock_openai.simulate_random_errors(probability=0.1)
-    # ...
 ```
 
 ### Strict Mode
 
 ```python
+import pytest
+
+
 def test_catches_unconfigured_calls(mock_openai):
     mock_openai.set_strict_mode(True)
-    
-    # This will raise an error because no response is configured
+
     with pytest.raises(RuntimeError, match="No mock response configured"):
         my_function_that_calls_llm()
 ```
 
----
+## Recording and Replay
 
-## 📼 Recording & Replay
+Recording and replay are currently unavailable. Earlier releases exposed the interface without
+safely intercepting provider calls. Current `auto`, `record`, and `replay` modes fail before test
+code can reach a provider instead of allowing an apparent replay test to fall through to a live
+API. Use the deterministic provider fixtures until recording returns with provider-level
+behavioral tests.
 
-Recording and replay are temporarily unavailable. Earlier releases exposed the interface
-without safely intercepting provider calls. Version 0.2.3 fails closed instead of allowing
-an apparent replay test to fall through to a live API. Use the deterministic provider fixtures
-until recording returns with provider-level behavioral tests.
+The `--llm-record`, `--llm-cassette-dir`, `llm_record`, and `llm_replay` names remain reserved for
+future compatibility; using them with `llm_recorder` does not create or replay cassettes today.
 
----
+## Configuration
 
-## 🔧 Configuration
-
-### CLI Options
+### Strict Mode
 
 ```bash
-# Strict mode (fail if any LLM call is unconfigured)
 pytest --llm-strict
 ```
 
-The reserved `--llm-record` and `--llm-cassette-dir` options currently fail closed when the
-`llm_recorder` fixture is used.
-
-### Markers
-
-```python
-@pytest.mark.llm_mock(provider="anthropic")
-def test_with_anthropic(mock_llm):
-    # mock_llm is now an AnthropicMock
-    pass
-
-```
-
-### pytest.ini / pyproject.toml
+Strict mode makes a provider fixture fail when a supported call has no configured response. It can
+also be enabled in pytest configuration:
 
 ```toml
 [tool.pytest.ini_options]
-# Default cassette directory
-llm_cassette_dir = "tests/fixtures/llm"
-
-# Always run in strict mode
 llm_strict = true
 ```
 
----
+### Universal Fixture
 
-## 🆚 Comparison
+```python
+import pytest
 
-| Feature | pytest-mockllm | unittest.mock | responses | vcrpy |
-|---------|---------------|---------------|-----------|-------|
-| Zero config | ✅ | ❌ | ❌ | ❌ |
-| pytest fixtures | ✅ | ❌ | ✅ | ✅ |
-| Async support | ✅ True Async | 🟡 Complex | ❌ | 🟡 HTTP |
-| OpenAI/Anthropic | ✅ Native | 🟡 Manual | ❌ | 🟡 HTTP |
-| Gemini support | ✅ Native | 🟡 Manual | ❌ | 🟡 HTTP |
-| Token counting | ✅ tiktoken | ❌ | ❌ | ❌ |
-| Cost Dashboard | ✅ | ❌ | ❌ | ❌ |
-| Recording/Replay | 🚧 Fail-closed | ❌ | ❌ | ✅ |
-| Chaos Engineering| ✅ Jitter/Error| 🟡 Manual | 🟡 HTTP | ❌ |
 
----
-
-## 🛣️ Roadmap
-
-- [x] True Async/await support
-- [x] Professional Tokenizers (tiktoken)
-- [x] Terminal Cost Dashboard
-- [x] Chaos Engineering (Jitter)
-- [ ] Safe provider-level recording and replay
-- [ ] More providers (Cohere, Mistral)
-- [ ] pytest-xdist compatibility
-- [ ] Integration with LangSmith
-
----
-
-## 🤝 Contributing
-
-We'd love your help! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-```bash
-# Clone the repo
-git clone https://github.com/godhiraj-code/pytest-mockllm.git
-
-# Install dev dependencies
-pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Run linting
-ruff check src/
-mypy src/
+@pytest.mark.llm_mock(provider="anthropic")
+def test_with_anthropic(mock_llm):
+    mock_llm.add_response("Configured through the universal fixture")
+    # Calls through the Anthropic Messages API are intercepted here.
 ```
 
----
+## Development
 
-## 📜 License
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
+
+```bash
+pip install -e ".[dev,all]"
+pytest
+ruff check src/
+mypy src/
+python -m build
+```
+
+## Roadmap
+
+- [x] Async provider fixtures
+- [x] Token and cost estimates
+- [x] Deterministic latency and error simulation
+- [ ] Safe provider-level recording and replay
+- [ ] More providers
+- [ ] Process-safe pytest-xdist aggregation
+
+## License
 
 MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-<p align="center">
-  <strong>Stop paying for tests. Start shipping faster.</strong>
-</p>
-
-<p align="center">
-  <a href="https://github.com/godhiraj-code/pytest-mockllm">⭐ Star us on GitHub</a> •
-  <a href="https://www.dhirajdas.dev">Built by Dhiraj Das</a>
-</p>

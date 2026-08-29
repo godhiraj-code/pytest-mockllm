@@ -341,7 +341,49 @@ class LangChainMock(MockLLM):
             "langchain_community.chat_models.ChatOpenAI",
         ]
 
+        def invoke(_instance: Any, messages: Any, *args: Any, **kwargs: Any) -> Any:
+            return mock_model.invoke(messages, *args, **kwargs)
+
+        async def ainvoke(_instance: Any, messages: Any, *args: Any, **kwargs: Any) -> Any:
+            return await mock_model.ainvoke(messages, *args, **kwargs)
+
+        def stream(_instance: Any, messages: Any, *args: Any, **kwargs: Any) -> Iterator[Any]:
+            return mock_model.stream(messages, *args, **kwargs)
+
+        async def astream(
+            _instance: Any, messages: Any, *args: Any, **kwargs: Any
+        ) -> AsyncIterator[Any]:
+            async for chunk in mock_model.astream(messages, *args, **kwargs):
+                yield chunk
+
+        def with_structured_output(
+            _instance: Any, schema: Any, **kwargs: Any
+        ) -> MagicMock:
+            return mock_model.with_structured_output(schema, **kwargs)
+
+        method_replacements = {
+            "invoke": invoke,
+            "ainvoke": ainvoke,
+            "stream": stream,
+            "astream": astream,
+            "with_structured_output": with_structured_output,
+        }
+
         for provider_path in providers_to_patch:
+            # Patch methods on already-imported classes before replacing future imports.
+            # Application modules commonly import provider classes during test collection.
+            for method_name, replacement in method_replacements.items():
+                try:
+                    method_patcher = patch(
+                        f"{provider_path}.{method_name}",
+                        new=replacement,
+                    )
+                    self._patches.append(method_patcher)
+                    method_patcher.start()
+                except Exception:
+                    # Provider not installed or method unavailable.
+                    pass
+
             try:
                 # Create a mock class that returns our mock model
                 def mock_class(*args: Any, **kwargs: Any) -> MagicMock:

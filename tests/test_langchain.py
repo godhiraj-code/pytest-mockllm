@@ -5,11 +5,25 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 
 from pytest_mockllm.integrations.langchain import LangChainMock
 
 pydantic = pytest.importorskip("pydantic")
 BaseModel = pydantic.BaseModel
+
+
+def test_provider_class_imported_before_fixture_is_intercepted(mock_langchain):
+    """Module-level provider imports must not bypass the active fixture."""
+    mock_langchain.add_response("Paris is the capital of France.")
+    llm = ChatOpenAI(model="gpt-4o", api_key="fixture-only")
+    prompt = ChatPromptTemplate.from_template("What is the capital of {country}?")
+
+    result = (prompt | llm).invoke({"country": "France"})
+
+    assert result.content == "Paris is the capital of France."
+    assert mock_langchain.call_count == 1
 
 
 class HabitantsResponse(BaseModel):

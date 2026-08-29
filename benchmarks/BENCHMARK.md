@@ -1,4 +1,4 @@
-# 🚀 Performance & ROI Benchmark
+# Performance and ROI Benchmark
 
 | Metric | Value |
 | :--- | :--- |
@@ -9,8 +9,8 @@
 | **Total Cost Saved** | $0.2750 |
 | **Total Time Saved** | 75.00 s |
 
-## 📈 Projected Savings (1,000 builds)
-- 💵 **Est. Money Saved**: $275.00
-- ⏳ **Est. Time Saved**: 20.8 hours
+## Projected Savings (1,000 builds)
+- **Est. Money Saved**: $275.00
+- **Est. Time Saved**: 20.8 hours
 
 *Generated on: 2026-08-21 14:31:59 UTC*

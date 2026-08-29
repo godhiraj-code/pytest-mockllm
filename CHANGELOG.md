@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.3.1] - 2026-08-30
+
+### Fixed
+
+- The `langchain` extra now installs `langchain-openai`, so the documented `ChatOpenAI` example
+  works after installing `pytest-mockllm[langchain]`.
+- Gemini now patches the real SDK module when it was imported before fixture activation.
+- LangChain provider classes imported during test collection now have their supported call methods
+  intercepted by the active fixture instead of reaching the provider.
+
+### Documentation
+
+- Replaced broad provider-fidelity and network-safety language with the supported fixture paths
+  and fixture-scoped guarantees.
+- Clarified that recording and replay options are reserved and currently fail closed.
+- Removed decorative emoji and obsolete comparison marketing.
+
 ## [0.3.0] - 2026-08-21
 
 ### Added
@@ -45,24 +64,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- 🔒 **Enterprise Redaction** - Added PII patterns for Azure OpenAI and Google Cloud (GCP) API keys.
-- 🛡️ **Thread-Safe Analytics** - Implemented locking for global statistics to support parallel testing with `pytest-xdist`.
+- **Enterprise Redaction** - Added PII patterns for Azure OpenAI and Google Cloud (GCP) API keys.
+- **Thread-Safe Analytics** - Implemented locking for global statistics to support parallel testing with `pytest-xdist`.
 
 ### Fixed
 
-- ⚡ **Non-blocking Async Latency** - Fixed a critical issue where `time.sleep` in jitter simulation would block the async event loop; now uses `asyncio.sleep` for async tests.
-- 🔗 **LangChain Parity** - Updated LangChain integration to correctly handle async delays and error simulation.
+- **Non-blocking Async Latency** - Fixed a critical issue where `time.sleep` in jitter simulation would block the async event loop; now uses `asyncio.sleep` for async tests.
+- **LangChain Parity** - Updated LangChain integration to correctly handle async delays and error simulation.
 
 ## [0.2.0] - 2025-12-22
 
 ### Added
 
-- 🚀 **True Async Support** - Replaced fake async with real coroutines and async iterators for OpenAI, Anthropic, Gemini, and LangChain.
-- 🎯 **Accurate Tokenizers** - Integrated `tiktoken` for OpenAI and improved Claude heuristics for high-fidelity token counting.
-- 📊 **Cost Analytics Dashboard** - Professional terminal summary showing USD saved per test run.
-- ⚡ **Chaos Engineering** - New `simulate_jitter` and `simulate_random_errors` tools to test application resilience.
-- 🔒 **Secure Recording** - Automatic PII redaction (API keys, Bearer tokens) in cassettes using the new `PIIRedactor`.
-- 🐍 **Python 3.14 Support** - Full compatibility and CI verification for the latest Python version.
+- **True Async Support** - Replaced fake async with real coroutines and async iterators for OpenAI, Anthropic, Gemini, and LangChain.
+- **Accurate Tokenizers** - Integrated `tiktoken` for OpenAI and improved Claude heuristics for high-fidelity token counting.
+- **Cost Analytics Dashboard** - Terminal summary showing estimated USD saved per test run.
+- **Chaos Engineering** - New `simulate_jitter` and `simulate_random_errors` tools to test application resilience.
+- **Secure Recording** - Automatic PII redaction (API keys, Bearer tokens) in cassettes using the new `PIIRedactor`.
+- **Python 3.14 Support** - Compatibility and CI coverage for Python 3.14.
 
 ### Fixed
 
@@ -74,28 +93,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- 🎉 Initial release of pytest-mockllm
-- ✨ Zero-config pytest plugin with automatic discovery
-- 🤖 **OpenAI mock** - Full support for Chat Completions, Embeddings, and Images API
+- Initial release of pytest-mockllm
+- Pytest plugin with automatic discovery
+- **OpenAI mock** - Chat Completions and Embeddings support
   - Streaming responses with proper SSE format
   - Function calling / tool use support
   - Token usage simulation
-- 🧠 **Anthropic mock** - Claude Messages API support
+- **Anthropic mock** - Claude Messages API support
   - Streaming responses
   - Tool use support
-- 💎 **Google Gemini mock** - GenerativeAI API support  
+- **Google Gemini mock** - GenerativeAI API support
   - Chat and content generation
   - Streaming support
-- 🦜 **LangChain integration** - Native support for LangChain's ChatModel interface
-- 📼 **Response recording** - VCR-like recording and replay for golden tests
-- 💰 **Cost estimation** - Mock and assert on token usage and API costs
-- ⚡ **Chaos testing** - Simulate rate limits, timeouts, and API errors
-- 📝 Comprehensive documentation and examples
+- **LangChain integration** - Support for LangChain's ChatModel interface
+- **Response recording interface** - Initial VCR-like recording and replay interface
+- **Cost estimation** - Mock and assert on token usage and API costs
+- **Chaos testing** - Simulate rate limits, timeouts, and API errors
+- Documentation and examples
 
 ### Security
 
 - No external network calls in mock mode (completely isolated testing)
 
-[Unreleased]: https://github.com/godhiraj-code/pytest-mockllm/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/godhiraj-code/pytest-mockllm/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/godhiraj-code/pytest-mockllm/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/godhiraj-code/pytest-mockllm/releases/tag/v0.3.0
 [0.2.3]: https://github.com/godhiraj-code/pytest-mockllm/releases/tag/v0.2.3
 [0.1.0]: https://github.com/godhiraj-code/pytest-mockllm/releases/tag/v0.1.0

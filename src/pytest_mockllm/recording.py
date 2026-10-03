@@ -102,7 +102,7 @@ class PIIRedactor:
     # Patterns for common API keys and sensitive tokens
     PATTERNS = [
         # OpenAI keys: sk-...
-        (re.compile(r"sk-[a-zA-Z0-9]{20,}", re.IGNORECASE), "[REDACTED_OPENAI_KEY]"),
+        (re.compile(r"sk-[a-zA-Z0-9_-]{20,}", re.IGNORECASE), "[REDACTED_OPENAI_KEY]"),
         # Anthropic keys: ant-api-...
         (re.compile(r"ant-api-[a-zA-Z0-9\-_]{20,}", re.IGNORECASE), "[REDACTED_ANTHROPIC_KEY]"),
         # Azure OpenAI
@@ -120,6 +120,9 @@ class PIIRedactor:
         "x-api-key",
         "token",
         "access_token",
+        "refresh_token",
+        "client_secret",
+        "password",
         "secret",
         "auth",
     }
@@ -135,7 +138,7 @@ class PIIRedactor:
                 else:
                     redacted[k] = cls.redact_dict(v)
             return redacted
-        elif isinstance(data, list):
+        elif isinstance(data, (list, tuple)):
             return [cls.redact_dict(item) for item in data]
         elif isinstance(data, str):
             return cls.redact_text(data)

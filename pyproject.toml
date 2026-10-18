@@ -75,6 +75,7 @@ Documentation = "https://github.com/godhiraj-code/pytest-mockllm#readme"
 Repository = "https://github.com/godhiraj-code/pytest-mockllm"
 Issues = "https://github.com/godhiraj-code/pytest-mockllm/issues"
 Changelog = "https://github.com/godhiraj-code/pytest-mockllm/blob/main/CHANGELOG.md"
+X = "https://x.com/dkkkkd"
 
 [project.entry-points.pytest11]
 mockllm = "pytest_mockllm.plugin"

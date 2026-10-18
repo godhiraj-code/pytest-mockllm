@@ -365,6 +365,10 @@ python -m build
 - [ ] More providers
 - [ ] Process-safe pytest-xdist aggregation
 
+## Author
+
+[Dhiraj Das](https://www.dhirajdas.dev) · [Follow @dkkkkd on X](https://x.com/dkkkkd)
+
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.

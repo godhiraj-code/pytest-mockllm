@@ -128,8 +128,6 @@ def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: Any)
     # Detailed rows (sorted by calls)
     sorted_models = sorted(GLOBAL_STATS.model_counts.items(), key=lambda x: x[1], reverse=True)
     for model, count in sorted_models:
-        # Note: We don't currently track per-model tokens in GLOBAL_STATS easily,
-        # but we can improve GLOBAL_STATS later. For now, show what we have.
         terminalreporter.write_line(f"{model:<30} {count:<8}")
 
     terminalreporter.write_line("-" * 75)
@@ -141,7 +139,8 @@ def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: Any)
     )
 
     # Estimated cost avoided by configured mock responses
-    cost_str = f"${GLOBAL_STATS.total_cost_saved:,.4f}"
+    cost = GLOBAL_STATS.total_cost_saved
+    cost_str = "<$0.0001" if 0 < cost < 0.0001 else f"${cost:,.4f}"
     terminalreporter.write_line("")
     terminalreporter.write_sep("=", f"Total Estimated Cost Saved: {cost_str}", bold=True, blue=True)
     terminalreporter.write_line("")

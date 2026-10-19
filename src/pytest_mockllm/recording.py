@@ -68,13 +68,16 @@ class Cassette:
     created: float = field(default_factory=time.time)
 
     def to_dict(self, redact: bool = False) -> dict[str, Any]:
-        data = {
+        data: dict[str, Any] = {
             "name": self.name,
             "version": self.version,
             "created": self.created,
             "interactions": [i.to_dict() for i in self.interactions],
         }
         if redact:
+            for interaction in data["interactions"]:
+                for side in ("request", "response"):
+                    interaction[side] = PIIRedactor.redact_http(interaction[side])
             return PIIRedactor.redact_dict(data)
         return data
 
@@ -119,47 +122,72 @@ class PIIRedactor:
 
     # Patterns for common API keys and sensitive tokens
     PATTERNS = [
-        # OpenAI keys: sk-...
-        (re.compile(r"sk-[a-zA-Z0-9_-]{20,}", re.IGNORECASE), "[REDACTED_OPENAI_KEY]"),
-        # Anthropic keys: ant-api-...
-        (re.compile(r"ant-api-[a-zA-Z0-9\-_]{20,}", re.IGNORECASE), "[REDACTED_ANTHROPIC_KEY]"),
+        # Match Anthropic before the broader OpenAI prefix.
+        (
+            re.compile(r"(?:sk-ant-|ant-api-)[a-zA-Z0-9_-]{20,}", re.IGNORECASE),
+            "[REDACTED_ANTHROPIC_KEY]",
+        ),
+        (re.compile(r"sk-(?!ant-)[a-zA-Z0-9_-]{20,}", re.IGNORECASE), "[REDACTED_OPENAI_KEY]"),
         # Azure OpenAI
         (re.compile(r"api-key: [a-zA-Z0-9]{32}", re.IGNORECASE), "api-key: [REDACTED]"),
         # Google/GCP keys: AIza...
-        (re.compile(r"AIza[0-9A-Za-z-_]{35}", re.IGNORECASE), "[REDACTED_GCP_KEY]"),
+        (re.compile(r"AIza[0-9A-Za-z_-]{35}", re.IGNORECASE), "[REDACTED_GCP_KEY]"),
         # Generic Bearer tokens
         (re.compile(r"Bearer [a-zA-Z0-9._~+/-]+=*", re.IGNORECASE), "Bearer [REDACTED]"),
     ]
 
-    SENSITIVE_KEYS = {
+    SENSITIVE_HEADERS = {
         "api_key",
         "api-key",
         "authorization",
         "x-api-key",
-        "token",
-        "access_token",
-        "secret",
-        "auth",
-        "key",
-        "password",
         "cookie",
         "set-cookie",
         "proxy-authorization",
         "x-goog-api-key",
-        "client_secret",
     }
+    SENSITIVE_QUERY_PARAMS = {
+        "key", "api_key", "api-key", "apikey", "access_token", "auth_token",
+        "token", "client_secret", "signature", "sig",
+    }
+    # Retained for callers that inspect the old attribute; never applied to JSON keys.
+    SENSITIVE_KEYS = SENSITIVE_HEADERS | SENSITIVE_QUERY_PARAMS
+
+    @classmethod
+    def redact_headers(cls, headers: dict[str, Any]) -> dict[str, Any]:
+        """Redact authentication headers without interpreting JSON field names."""
+        return {
+            key: "[REDACTED]" if key.lower() in cls.SENSITIVE_HEADERS else cls.redact_dict(value)
+            for key, value in headers.items()
+        }
+
+    @classmethod
+    def redact_url(cls, value: str) -> str:
+        """Remove URL credentials and sensitive query parameters."""
+        url = urlsplit(value)
+        query = [
+            (key, "[REDACTED]" if key.lower() in cls.SENSITIVE_QUERY_PARAMS else cls.redact_text(val))
+            for key, val in parse_qsl(url.query, keep_blank_values=True)
+        ]
+        return urlunsplit(
+            (url.scheme, url.netloc.rsplit("@", 1)[-1], url.path, urlencode(sorted(query)), "")
+        )
+
+    @classmethod
+    def redact_http(cls, message: dict[str, Any]) -> dict[str, Any]:
+        """Redact an HTTP envelope; nested body objects retain their field names."""
+        result = cls.redact_dict(message)
+        if isinstance(message.get("headers"), dict):
+            result["headers"] = cls.redact_headers(message["headers"])
+        if isinstance(message.get("url"), str):
+            result["url"] = cls.redact_url(message["url"])
+        return result
 
     @classmethod
     def redact_dict(cls, data: Any) -> Any:
-        """Deeply redact a dictionary or list of any sensitive information."""
+        """Redact recognizable secret values, preserving arbitrary JSON schemas."""
         if isinstance(data, dict):
-            redacted = {}
-            for k, v in data.items():
-                if str(k).lower() in cls.SENSITIVE_KEYS:
-                    redacted[k] = "[REDACTED]"
-                else:
-                    redacted[k] = cls.redact_dict(v)
-            return redacted
+            return {k: cls.redact_dict(v) for k, v in data.items()}
         elif isinstance(data, list):
             return [cls.redact_dict(item) for item in data]
         elif isinstance(data, str):
@@ -323,21 +351,23 @@ class LLMRecorder:
             raise RecordingError("Recording supports JSON request bodies only") from error
         headers = dict(request.headers)
         query = parse_qsl(url.query, keep_blank_values=True)
-        for key, value in [*headers.items(), *query]:
-            if key.lower() in PIIRedactor.SENSITIVE_KEYS and value:
-                self._secrets.add(value)
-                if value.lower().startswith("bearer "):
-                    self._secrets.add(value[7:])
-        query = [
-            (key, "[REDACTED]" if key.lower() in PIIRedactor.SENSITIVE_KEYS else value)
-            for key, value in query
-        ]
-        # No URL userinfo is ever retained; auth is excluded from request matching.
-        clean_url = urlunsplit(
-            (url.scheme, url.netloc.rsplit("@", 1)[-1], url.path, urlencode(sorted(query)), "")
-        )
+        for values, sensitive in (
+            (headers.items(), PIIRedactor.SENSITIVE_HEADERS),
+            (query, PIIRedactor.SENSITIVE_QUERY_PARAMS),
+        ):
+            for key, value in values:
+                if key.lower() in sensitive and value:
+                    self._secrets.add(value)
+                    if value.lower().startswith("bearer "):
+                        self._secrets.add(value[7:])
+        clean_url = PIIRedactor.redact_url(str(request.url))
         return self._redact(
-            {"method": request.method, "url": clean_url, "headers": headers, "body": body}
+            {
+                "method": request.method,
+                "url": clean_url,
+                "headers": PIIRedactor.redact_headers(headers),
+                "body": body,
+            }
         )
 
     def _hash_request(self, request: dict[str, Any]) -> str:
@@ -411,7 +441,7 @@ class LLMRecorder:
             request,
             {
                 "status_code": response.status_code,
-                "headers": self._redact(headers),
+                "headers": PIIRedactor.redact_headers(headers),
                 "encoding": encoding,
                 "body": body,
             },

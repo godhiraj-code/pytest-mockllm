@@ -255,8 +255,6 @@ class LegacyGeminiMock(MockLLM):
             model.start_chat = lambda **kw: self._create_chat_session()
 
             async def start_chat_async(**kw: Any) -> Any:
-                # Chat sessions in Gemini are mostly local state management
-                # but we'll provide an async variant if needed
                 return self._create_chat_session()
 
             model.start_chat_async = start_chat_async

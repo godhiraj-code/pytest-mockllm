@@ -272,8 +272,9 @@ headers. Credential and SDK telemetry headers do not affect matching. Identical 
 consume recorded responses in order; a cassette cannot be replayed infinitely in one test.
 Changing the base URL or a prompt requires a matching recording.
 
-API keys, authorization/cookie headers, known token patterns, and credential fields are
-redacted automatically, including credentials echoed in JSON or SSE. This is **not general
+Credential headers and query parameters, known key/token patterns, and credentials used
+by the SDK are redacted, including echoes in JSON or SSE. JSON fields named `key`, `token`,
+or `auth` are preserved unless their values contain a recognized secret. This is **not general
 PII removal**: prompts and model output remain readable. Review cassettes before committing.
 Redacted fields replay as redacted values.
 

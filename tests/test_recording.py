@@ -321,8 +321,8 @@ def test_redaction_in_headers_query_nested_body_and_echo(tmp_path, provider):
     def handle(request):
         data = payload(provider, "echo private-record-key and Bearer short-token")
         data["metadata"] = {
-            "api_key": "response-secret",
-            "nested": [{"Authorization": "another-secret"}],
+            "api_key": "sk-ant-" + "a" * 35,
+            "nested": [{"Authorization": "private-record-key"}],
         }
         return http.Response(
             200,
@@ -337,23 +337,61 @@ def test_redaction_in_headers_query_nested_body_and_echo(tmp_path, provider):
                 client,
                 provider,
                 extra_query={"key": "query-secret"},
-                extra_body={"metadata": {"api_key": "body-secret"}},
+                extra_body={"metadata": {"api_key": "sk-" + "b" * 35}},
                 extra_headers={"X-Api-Key": "custom-secret"},
             )
     text = path.read_text()
     for secret in [
         "private-record-key",
         "short-token",
-        "response-secret",
-        "another-secret",
+        "sk-ant-" + "a" * 35,
         "session=private",
         "response-auth",
         "query-secret",
-        "body-secret",
+        "sk-" + "b" * 35,
         "custom-secret",
     ]:
         assert secret not in text
     assert "[REDACTED]" in text
+    assert "[REDACTED_ANTHROPIC_KEY]" in text
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+def test_tool_schema_and_body_fields_survive_record_replay(tmp_path, provider):
+    http = http_module(provider)
+    path = tmp_path / "schema.yaml"
+    schema = {
+        "type": "object",
+        "properties": {
+            name: {"type": "string", "description": f"The {name} value"}
+            for name in ("token", "key", "auth", "api_key", "authorization")
+        },
+        "required": ["token"],
+    }
+    tool = {"name": "inspect", "input_schema": schema} if provider == "anthropic" else {
+        "type": "function", "function": {"name": "inspect", "parameters": schema},
+    }
+    body_fields = {"token": "word", "key": "lookup", "auth": "method",
+                   "nested": {"headers": {"Authorization": "schema description"}}}
+
+    def handle(request):
+        assert json.loads(request.content)["tools"] == [tool]
+        data = payload(provider)
+        data["metadata"] = body_fields
+        return http.Response(200, json=data)
+
+    with make_client(provider, handle) as client, LLMRecorder(path, record_mode="once"):
+        original = dump(call(client, provider, tools=[tool]))
+    interaction = yaml.safe_load(path.read_text())["interactions"][0]
+    assert interaction["request"]["body"]["tools"] == [tool]
+    assert interaction["response"]["body"]["metadata"] == body_fields
+    assert "private-record-key" not in path.read_text()
+    with make_client(provider, forbidden, key="different-credential") as client, LLMRecorder(path):
+        schema["properties"]["token"]["type"] = "integer"
+        with pytest.raises(CassetteMissError):
+            call(client, provider, tools=[tool])
+        schema["properties"]["token"]["type"] = "string"
+        assert dump(call(client, provider, tools=[tool])) == original
 
 
 @pytest.mark.parametrize("provider", ["openai", "anthropic"])
@@ -674,6 +712,15 @@ def test_stream_credentials_are_redacted(tmp_path, provider):
     http = http_module(provider)
     path = tmp_path / "secret-stream.yaml"
     body = streaming_body(provider).replace('"hel"', '"private-record-key"')
+    schema = {"token": {"type": "string"}, "key": "lookup", "auth": "method"}
+    lines = []
+    for line in body.splitlines(keepends=True):
+        if line.startswith("data: {"):
+            data = json.loads(line[5:])
+            data["metadata"] = schema
+            line = "data: " + json.dumps(data) + "\n"
+        lines.append(line)
+    body = "".join(lines)
 
     def handle(request):
         return http.Response(
@@ -687,6 +734,10 @@ def test_stream_credentials_are_redacted(tmp_path, provider):
     contents = path.read_text()
     assert "private-record-key" not in contents
     assert "response-secret" not in contents
+    recorded_body = yaml.safe_load(contents)["interactions"][0]["response"]["body"]
+    for line in recorded_body.splitlines():
+        if line.startswith("data: {"):
+            assert json.loads(line[5:])["metadata"] == schema
     with make_client(provider, forbidden) as client, LLMRecorder(path):
         events = list(call(client, provider, stream=True))
     assert "[REDACTED]" in json.dumps([dump(e) for e in events])

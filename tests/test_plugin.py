@@ -4,6 +4,7 @@ These tests use pytester to test the pytest integration itself.
 """
 
 from importlib.metadata import requires
+from unittest.mock import Mock
 
 import pytest
 
@@ -213,6 +214,28 @@ def test_stats_are_opt_in(pytester, args, ini, expected):
     result = pytester.runpytest("-q", *args)
     result.assert_outcomes(passed=1)
     assert ("Total Estimated Cost Saved" in result.stdout.str()) is expected
+
+
+@pytest.mark.parametrize("cost,display", [
+    (0, "$0.0000"),
+    (0.0000001, "<$0.0001"),
+    (0.000099, "<$0.0001"),
+    (0.0001, "$0.0001"),
+    (1.23456, "$1.2346"),
+])
+def test_stats_cost_precision(monkeypatch, cost, display):
+    from pytest_mockllm.plugin import pytest_terminal_summary
+    from pytest_mockllm.stats import GLOBAL_STATS
+
+    monkeypatch.setattr(GLOBAL_STATS, "total_calls", 1)
+    monkeypatch.setattr(GLOBAL_STATS, "total_cost_saved", cost)
+    config = Mock()
+    config.getoption.side_effect = lambda name: name == "--llm-stats"
+    reporter = Mock()
+    pytest_terminal_summary(reporter, 0, config)
+    reporter.write_sep.assert_called_once_with(
+        "=", f"Total Estimated Cost Saved: {display}", bold=True, blue=True,
+    )
 
 
 def test_global_strict_applies_to_langchain(pytester):

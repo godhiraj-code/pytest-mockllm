@@ -14,7 +14,7 @@ Quick Start:
     ```
 
 For more examples and documentation, visit:
-https://github.com/pytest-mockllm/pytest-mockllm
+https://github.com/godhiraj-code/pytest-mockllm
 """
 
 from pytest_mockllm.core import MockLLM, MockResponse

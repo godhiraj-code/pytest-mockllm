@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.0] - Unreleased
 
+### Breaking changes / upgrading from 0.3.x
+
+- Recording is now implemented: the recording flags and markers no longer always
+  fail closed as unavailable. `--llm-record=once` can make real, billable API calls
+  when a cassette does not exist; `new_episodes` records unmatched calls and `all`
+  replaces recordings. Use `--llm-record=none` (the default) for offline replay;
+  missing or mismatched interactions still fail closed. Review the selected mode
+  before running tests with real credentials, and regenerate old experimental
+  cassettes with the new recorder.
+- Replace direct `LLMRecorder(mode="auto"|"record"|"replay")` usage with
+  `record_mode="once"|"all"|"none"`, respectively. The old spellings warn but still
+  work. Legacy `mode="none"` means live pass-through; new `record_mode="none"`
+  means offline replay. Do not substitute one for the other without checking intent.
+- Anthropic fixtures keep `mock_anthropic`, `add_response`, `simulate_error`, and
+  their existing arguments. Helpers that assumed a bare generator or a configurable
+  `MagicMock` from `messages.stream()` must use the SDK's stream context manager:
+  `with client.messages.stream(...) as stream:` (or `async with` for async clients),
+  then consume `stream.text_stream` or call `stream.get_final_message()` (await it
+  for async clients). `messages.create(stream=True)` yields official typed events;
+  access text with `event.delta.text` after checking its event/delta type. Configure
+  fixture output through `add_response(..., stream_chunks=..., tool_calls=...)`
+  rather than mutating private response/event-building helpers. The Anthropic SDK
+  minimum is now 0.75.0; public fixture helpers do not require renaming.
+- `[google]` now uses `google-genai`; import `from google import genai` and construct
+  `genai.Client(...)`. Install `[google-legacy]` to retain the deprecated
+  `google.generativeai` adapter temporarily. Enable `--llm-stats` if you relied on
+  the previously automatic cost summary.
+
 ### Added
 
 - Working OpenAI and Anthropic recording/replay using readable YAML cassettes,
@@ -49,6 +77,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Redaction preserves JSON/tool-schema fields named `key`, `token`, `auth`, and
+  similar names. Credential headers/query parameters and known credential values
+  remain redacted; `sk-ant-...` keys carry the Anthropic label.
+- Tiny nonzero estimated costs display as `<$0.0001` instead of `$0.0000`.
 - Simulated timeout/server errors now use the SDK's correct constructors.
 - Async OpenAI Responses latency yields the event loop.
 - Responses tool-arguments completion events include the function name required

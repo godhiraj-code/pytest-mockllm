@@ -1,5 +1,9 @@
 Tests that call real LLM APIs are slow, cost money, and give different answers each run.
 
+![Terminal demo: a mock_openai test passes with no API key, then a test records a response to a cassette with the key redacted and replays it with no server and no key](https://raw.githubusercontent.com/godhiraj-code/pytest-mockllm/main/docs/demo.gif)
+
+<sub>In the recording part of the demo, a local OpenAI-compatible server stands in for the API because the demo machine has no real key.</sub>
+
 # pytest-mockllm
 
 Configure the answer, run your Python code, and assert what it sent to the model.

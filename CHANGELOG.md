@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   maps to once/all/none with a deprecation warning. Legacy `mode='none'` retains
   explicit live pass-through; `record_mode='none'` is offline replay.
 - Provider dependency floors now match tested SDK versions: OpenAI 1.109.1,
-  Anthropic 0.75.0, google-genai 1.52.0, langchain-core 0.3.80, and
+  Anthropic 0.75.0, google-genai 1.47.0, langchain-core 0.3.80, and
   langchain-openai 0.3.35. Removed the Anthropic `<1.0` cap after testing 1.15.0.
   HTTPX and HTTPX2 response types follow the installed provider SDK.
 
@@ -51,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Simulated timeout/server errors now use the SDK's correct constructors.
 - Async OpenAI Responses latency yields the event loop.
+- Responses tool-arguments completion events include the function name required
+  by some SDK versions; the Google dependency floor preserves Python 3.9 installs.
 - Chat tool streams no longer require explicit argument fragments and support
   multiple tools. Anthropic streams preserve both text and tool-use blocks.
 - Legacy Gemini streaming no longer passes duplicate `stream` arguments, and
@@ -62,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Validation and remaining limits
 
-- Full suite exercised on Python 3.10–3.13; minimum/current SDK contract tests,
+- Full suite exercised on Python 3.10â€“3.13; minimum/current SDK contract tests,
   actual local HTTP record/replay, executable README examples, and package checks.
 - No paid/live-provider validation or PyPI publication. Gemini recording, LiteLLM,
   new assertion helpers, and a live-test environment marker are not included.

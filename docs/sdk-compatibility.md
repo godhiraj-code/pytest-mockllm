@@ -6,14 +6,15 @@ Checked on 2026-10-19 using PyPI metadata and the installed SDK source.
 | --- | --- | --- |
 | [openai](https://pypi.org/project/openai/3.35.1/) | 3.35.1 | 1.109.1 |
 | [anthropic](https://pypi.org/project/anthropic/1.15.0/) | 1.15.0 | 0.75.0 |
-| [google-genai](https://pypi.org/project/google-genai/2.31.0/) | 2.31.0 | 1.52.0 |
+| [google-genai](https://pypi.org/project/google-genai/2.31.0/) | 2.31.0 | 1.47.0 |
 | [langchain-core](https://pypi.org/project/langchain-core/1.6.12/) | 1.6.12 | 0.3.80 |
 | [langchain-openai](https://pypi.org/project/langchain-openai/1.7.2/) | 1.7.2 | 0.3.35 |
 
 Provider dependency floors reflect the older SDK set actually exercised here. This
 is not a claim that every version between the endpoints has been tested. OpenAI and
 Anthropic extras require Pydantic 2 for typed response/stream validation. All provider
-SDKs remain optional. The deprecated google-generativeai adapter is tested separately
+SDKs remain optional. The google-genai 1.47.0 floor preserves Python 3.9 support;
+newer SDK releases can require newer Python versions. The deprecated google-generativeai adapter is tested separately
 with 0.8.6 and issues a deprecation warning on model construction.
 
 ## Reproducible checks
@@ -25,7 +26,8 @@ ruff check src/
 mypy src/pytest_mockllm --ignore-missing-imports --python-version 3.11 --follow-imports=silent
 ```
 
-The full suite was run locally on Windows with Python 3.10, 3.11, 3.12, and 3.13.
+The full suite was run locally on Windows with Python 3.9, 3.10, 3.11, 3.12, and 3.13.
+Python 3.9 uses the newest SDK versions that still support that interpreter.
 The optional legacy Gemini module skips when google-generativeai is absent. The
 older SDK set and legacy adapter were also tested on Python 3.12. The existing
 cross-platform CI matrix covers Linux, macOS, and Windows; CI results, not a local
@@ -35,7 +37,7 @@ The CI minimum-SDK job installs:
 
 ```bash
 pip install -e ".[all,dev,google-legacy]" \
-  "openai==1.109.1" "anthropic==0.75.0" "google-genai==1.52.0" \
+  "openai==1.109.1" "anthropic==0.75.0" "google-genai==1.47.0" \
   "langchain-core==0.3.80" "langchain-openai==0.3.35"
 pytest
 ```

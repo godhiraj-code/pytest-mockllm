@@ -322,7 +322,7 @@ an actual run with `python scripts/record_demo.py`; play it with `asciinema play
 The script needs only the `[openai]` extra and does not fabricate test output.
 
 ```bash
-pip install -e ".[all,dev]"
+pip install -e ".[all,dev]" build
 pytest
 ruff check src/
 mypy src/

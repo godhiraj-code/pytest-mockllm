@@ -67,6 +67,9 @@ async def test_responses_stream_types_and_context_manager(mock_openai, asynchron
     if tool:
         fragments = [e.delta for e in events if e.type == "response.function_call_arguments.delta"]
         assert json.loads("".join(fragments)) == {"city": "Paris"}
+        done = next(e for e in events if e.type == "response.function_call_arguments.done")
+        assert done.name == "weather"
+        assert json.loads(done.arguments) == {"city": "Paris"}
     else:
         assert "".join(e.delta for e in events if e.type == "response.output_text.delta") == "hello"
         assert events[-1].response.output_text == "hello"

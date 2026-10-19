@@ -52,6 +52,7 @@ def response_events(completed: Any, configured: Any) -> Iterator[Any]:
                 "ResponseFunctionCallArgumentsDoneEvent",
                 "response.function_call_arguments.done",
                 arguments=item.arguments,
+                name=item.name,
                 **common,
             )
         else:

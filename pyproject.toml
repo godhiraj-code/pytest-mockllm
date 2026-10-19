@@ -51,13 +51,13 @@ dependencies = [
 [project.optional-dependencies]
 openai = ["openai>=1.109.1", "tiktoken>=0.7.0", "pydantic>=2.9.0"]
 anthropic = ["anthropic>=0.75.0", "pydantic>=2.9.0"]
-google = ["google-genai>=1.52.0"]
-google-legacy = ["google-genai>=1.52.0", "google-generativeai>=0.3.0"]
+google = ["google-genai>=1.47.0"]
+google-legacy = ["google-genai>=1.47.0", "google-generativeai>=0.3.0"]
 langchain = ["langchain-core>=0.3.80", "langchain-openai>=0.3.35"]
 all = [
     "openai>=1.109.1",
     "anthropic>=0.75.0",
-    "google-genai>=1.52.0",
+    "google-genai>=1.47.0",
     "langchain-core>=0.3.80",
     "langchain-openai>=0.3.35",
     "tiktoken>=0.7.0",

@@ -318,7 +318,7 @@ Statistics are **off by default**. Enable with `pytest --llm-stats` or `llm_stat
 
 ## Demo and development
 
-[Demo tests](examples/test_demo.py) run offline. Generate an asciinema v2 recording of
+[Demo tests](https://github.com/godhiraj-code/pytest-mockllm/blob/v0.4.0/examples/test_demo.py) run offline. See the [recorded run](https://github.com/godhiraj-code/pytest-mockllm/blob/v0.4.0/docs/demo.cast), or generate an asciinema v2 recording of
 an actual run with `python scripts/record_demo.py`; play it with `asciinema play docs/demo.cast`.
 The script needs only the `[openai]` extra and does not fabricate test output.
 
@@ -330,7 +330,7 @@ mypy src/
 python -m build
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md), and the
-[SDK compatibility notes](docs/sdk-compatibility.md) for tested versions and limits.
+See [CONTRIBUTING.md](https://github.com/godhiraj-code/pytest-mockllm/blob/v0.4.0/CONTRIBUTING.md), [CHANGELOG.md](https://github.com/godhiraj-code/pytest-mockllm/blob/v0.4.0/CHANGELOG.md), and the
+[SDK compatibility notes](https://github.com/godhiraj-code/pytest-mockllm/blob/v0.4.0/docs/sdk-compatibility.md) for tested versions and limits.
 
-MIT licensed — [LICENSE](LICENSE). Maintained by [Dhiraj Das](https://www.dhirajdas.dev).
+MIT licensed — [LICENSE](https://github.com/godhiraj-code/pytest-mockllm/blob/v0.4.0/LICENSE). Maintained by [Dhiraj Das](https://www.dhirajdas.dev).

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from pytest_mockllm.core import MockLLM
 from pytest_mockllm.providers.anthropic import AnthropicMock
 from pytest_mockllm.providers.gemini import GeminiMock
 from pytest_mockllm.providers.openai import OpenAIMock
@@ -20,6 +21,8 @@ from pytest_mockllm.recording import LLMRecorder
 
 if TYPE_CHECKING:
     from _pytest.fixtures import FixtureRequest
+
+    from pytest_mockllm.integrations.langchain import LangChainMock
 
 
 def _strict_enabled(request: FixtureRequest) -> bool:
@@ -104,16 +107,16 @@ def mock_gemini(request: FixtureRequest) -> Generator[GeminiMock, None, None]:
     """
     Mock Google Gemini API for testing.
 
-    Automatically patches the Google GenerativeAI client to return mock responses.
+    Automatically patches the Google GenAI client to return mock responses.
     No API key or network access required.
 
     Example:
         >>> def test_gemini_bot(mock_gemini):
         ...     mock_gemini.add_response("Here's what I found...")
         ...
-        ...     import google.generativeai as genai
-        ...     model = genai.GenerativeModel("gemini-1.5-pro")
-        ...     response = model.generate_content("Tell me about AI")
+        ...     from google import genai
+        ...     client = genai.Client(api_key="fixture-only")
+        ...     response = client.models.generate_content(model="gemini-2.5-flash", contents="Tell me about AI")
         ...
         ...     assert "found" in response.text.lower()
     """
@@ -123,7 +126,7 @@ def mock_gemini(request: FixtureRequest) -> Generator[GeminiMock, None, None]:
 
 
 @pytest.fixture
-def mock_llm(request: FixtureRequest):  # type: ignore[no-untyped-def]
+def mock_llm(request: FixtureRequest) -> Generator[MockLLM, None, None]:
     """
     Universal LLM mock - defaults to OpenAI.
 
@@ -160,7 +163,7 @@ def mock_llm(request: FixtureRequest):  # type: ignore[no-untyped-def]
 
 
 @pytest.fixture
-def mock_langchain():
+def mock_langchain(request: FixtureRequest) -> Generator[LangChainMock, None, None]:
     """
     Mock LangChain LLM and ChatModel for testing.
 
@@ -184,39 +187,39 @@ def mock_langchain():
     from pytest_mockllm.integrations.langchain import LangChainMock
 
     with LangChainMock() as mock:
+        mock.set_strict_mode(_strict_enabled(request))
         yield mock
 
 
 @pytest.fixture
 def llm_recorder(request: FixtureRequest) -> Generator[LLMRecorder, None, None]:
-    """
-    Reserved recording/replay fixture.
+    """Replay offline by default; opt into live recording with --llm-record=once."""
+    import hashlib
+    import re
 
-    Provider interception is not implemented for this fixture, so record, replay, and auto
-    modes raise before test code can reach a provider. Use a provider fixture such as
-    ``mock_openai`` for deterministic offline tests.
-    """
-    # Get cassette directory from config or use default
+    conflicting = set(request.fixturenames) & {
+        "mock_openai",
+        "mock_anthropic",
+        "mock_llm",
+        "mock_gemini",
+        "mock_langchain",
+    }
+    if conflicting:
+        raise pytest.UsageError("Use llm_recorder separately from provider mock fixtures")
     cassette_dir = request.config.getoption("--llm-cassette-dir") or request.config.getini(
         "llm_cassette_dir"
     )
-    record_mode = request.config.getoption("--llm-record", default=False)
-
-    # Use test name as cassette name
-    test_name = request.node.name
-    cassette_path = Path(cassette_dir) / f"{test_name}.yaml"
-
-    # Check for llm_record or llm_replay markers
+    # Include file, class and parameter IDs; rootpath makes invocation location irrelevant.
+    nodeid = request.node.nodeid
+    name = re.sub(r"[^a-zA-Z0-9_-]", "_", request.node.name)[:80]
+    digest = hashlib.sha256(nodeid.encode()).hexdigest()[:16]
+    cassette_path = Path(request.config.rootpath) / cassette_dir / f"{name}-{digest}.yaml"
     record_marker = request.node.get_closest_marker("llm_record")
     replay_marker = request.node.get_closest_marker("llm_replay")
-
-    mode = "auto"
-    if record_marker or record_mode:
-        mode = "record"
-    elif replay_marker:
-        mode = "replay"
-
-    recorder = LLMRecorder(cassette_path=cassette_path, mode=mode)
-
-    with recorder:
+    mode = request.config.getoption("--llm-record")
+    if record_marker and "mode" in record_marker.kwargs:
+        mode = record_marker.kwargs["mode"]
+    if replay_marker:
+        mode = "none"
+    with LLMRecorder(cassette_path=cassette_path, record_mode=mode) as recorder:
         yield recorder

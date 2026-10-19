@@ -14,7 +14,7 @@ Quick Start:
     ```
 
 For more examples and documentation, visit:
-https://github.com/pytest-mockllm/pytest-mockllm
+https://github.com/godhiraj-code/pytest-mockllm
 """
 
 from pytest_mockllm.core import MockLLM, MockResponse
@@ -23,7 +23,7 @@ from pytest_mockllm.providers.gemini import GeminiMock
 from pytest_mockllm.providers.openai import OpenAIMock
 from pytest_mockllm.recording import LLMRecorder
 
-__version__ = "0.2.3"
+__version__ = "0.4.0"
 __all__ = [
     # Core
     "MockLLM",

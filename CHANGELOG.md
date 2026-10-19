@@ -7,6 +7,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - Unreleased
+
+### Breaking changes / upgrading from 0.3.x
+
+- Recording is now implemented: the recording flags and markers no longer always
+  fail closed as unavailable. `--llm-record=once` can make real, billable API calls
+  when a cassette does not exist; `new_episodes` records unmatched calls and `all`
+  replaces recordings. Use `--llm-record=none` (the default) for offline replay;
+  missing or mismatched interactions still fail closed. Review the selected mode
+  before running tests with real credentials, and regenerate old experimental
+  cassettes with the new recorder.
+- Replace direct `LLMRecorder(mode="auto"|"record"|"replay")` usage with
+  `record_mode="once"|"all"|"none"`, respectively. The old spellings warn but still
+  work. Legacy `mode="none"` means live pass-through; new `record_mode="none"`
+  means offline replay. Do not substitute one for the other without checking intent.
+- Anthropic fixtures keep `mock_anthropic`, `add_response`, `simulate_error`, and
+  their existing arguments. Helpers that assumed a bare generator or a configurable
+  `MagicMock` from `messages.stream()` must use the SDK's stream context manager:
+  `with client.messages.stream(...) as stream:` (or `async with` for async clients),
+  then consume `stream.text_stream` or call `stream.get_final_message()` (await it
+  for async clients). `messages.create(stream=True)` yields official typed events;
+  access text with `event.delta.text` after checking its event/delta type. Configure
+  fixture output through `add_response(..., stream_chunks=..., tool_calls=...)`
+  rather than mutating private response/event-building helpers. The Anthropic SDK
+  minimum is now 0.75.0; public fixture helpers do not require renaming.
+- `[google]` now uses `google-genai`; import `from google import genai` and construct
+  `genai.Client(...)`. Install `[google-legacy]` to retain the deprecated
+  `google.generativeai` adapter temporarily. Enable `--llm-stats` if you relied on
+  the previously automatic cost summary.
+
+### Added
+
+- Working OpenAI and Anthropic recording/replay using readable YAML cassettes,
+  with `--llm-record=none|once|new_episodes|all`, the `llm_recorder` fixture,
+  automatic recording/replay markers, and offline replay by default.
+- SDK-parsed sync/async JSON and SSE playback, including fragmented tool calls,
+  OpenAI Responses structured parsing and embeddings, Anthropic stream helpers,
+  and HTTP error/retry sequences. Recording buffers complete streams; arrival
+  timing and partial transport failures are not replayed.
+- Request matching includes provider, method, URL/query, JSON body, and selected
+  semantic headers. Identical requests consume interactions in order. Misses in
+  offline modes and unsupported endpoints fail before network access.
+- Credential/header redaction for requests, response JSON and SSE, atomic cassette
+  writes, and collision-resistant per-test paths. Redaction is not general PII removal.
+- Native `google-genai` typed generation, chat sessions, sync/async streaming,
+  function calls, structured output, and provider error classes.
+- Typed OpenAI Responses streams and function-call outputs, SDK stream context
+  managers, and final structured output through `responses.stream`.
+- `--llm-stats`, `--no-llm-stats`, and `llm_stats` configuration; statistics are now
+  off by default.
+- A tested README quickstart, provider/stream/tool/error/recording examples, and
+  an explicit comparison with mock, transport, recording, and evaluation tools.
+- An actual asciinema demo (`docs/demo.cast`) and a portable regeneration script.
+- `py.typed` package marker and version consistency checks.
+
+### Changed
+
+- `[google]` and `[all]` now install `google-genai`. `[google-legacy]` retains the
+  old `google-generativeai` adapter with a deprecation warning. Existing fixture
+  names, response configuration arguments, and the legacy module accessor remain.
+- New direct recorder usage selects `record_mode`. Legacy `mode=auto|record|replay`
+  maps to once/all/none with a deprecation warning. Legacy `mode='none'` retains
+  explicit live pass-through; `record_mode='none'` is offline replay.
+- Provider dependency floors now match tested SDK versions: OpenAI 1.109.1,
+  Anthropic 0.75.0, google-genai 1.47.0, langchain-core 0.3.80, and
+  langchain-openai 0.3.35. Removed the Anthropic `<1.0` cap after testing 1.15.0.
+  HTTPX and HTTPX2 response types follow the installed provider SDK.
+
+### Fixed
+
+- Redaction preserves JSON/tool-schema fields named `key`, `token`, `auth`, and
+  similar names. Credential headers/query parameters and known credential values
+  remain redacted; `sk-ant-...` keys carry the Anthropic label.
+- Tiny nonzero estimated costs display as `<$0.0001` instead of `$0.0000`.
+- Simulated timeout/server errors now use the SDK's correct constructors.
+- Async OpenAI Responses latency yields the event loop.
+- Responses tool-arguments completion events include the function name required
+  by some SDK versions; the Google dependency floor preserves Python 3.9 installs.
+- Chat tool streams no longer require explicit argument fragments and support
+  multiple tools. Anthropic streams preserve both text and tool-use blocks.
+- Legacy Gemini streaming no longer passes duplicate `stream` arguments, and
+  positional prompts/model names are included in the request ledger.
+- Global strict mode also applies to LangChain.
+- Implicit token estimates no longer load/download tiktoken encoders. Already-loaded
+  encoders remain usable; otherwise counting falls back to a character estimate.
+- Package `__version__` now agrees with project metadata at 0.4.0.
+
+### Validation and remaining limits
+
+- Full suite exercised on Python 3.10–3.13; minimum/current SDK contract tests,
+  actual local HTTP record/replay, executable README examples, and package checks.
+- No paid/live-provider validation or PyPI publication. Gemini recording, LiteLLM,
+  new assertion helpers, and a live-test environment marker are not included.
+- See [SDK compatibility](docs/sdk-compatibility.md) for versions, test evidence,
+  private-SDK-hook risk, buffered streaming, and unsupported interfaces.
+
 ## [0.3.1] - 2026-08-30
 
 ### Fixed
@@ -116,6 +212,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No external network calls in mock mode (completely isolated testing)
 
 [Unreleased]: https://github.com/godhiraj-code/pytest-mockllm/compare/v0.3.1...HEAD
+[0.4.0]: https://github.com/godhiraj-code/pytest-mockllm/compare/v0.3.1...HEAD
 [0.3.1]: https://github.com/godhiraj-code/pytest-mockllm/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/godhiraj-code/pytest-mockllm/releases/tag/v0.3.0
 [0.2.3]: https://github.com/godhiraj-code/pytest-mockllm/releases/tag/v0.2.3

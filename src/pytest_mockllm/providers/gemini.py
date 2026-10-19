@@ -1,275 +1,165 @@
-"""
-Google Gemini API mock for pytest-mockllm.
-
-Provides comprehensive mocking for the Google GenerativeAI SDK including:
-- Content generation (sync, async, streaming)
-- Chat sessions
-- Embeddings
-"""
+"""Fixture-scoped google-genai content generation, streaming and chat mocking."""
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator, Iterator
+from dataclasses import replace
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-from pytest_mockllm.core import MockError, MockLLM, MockResponse
+from pytest_mockllm.core import MockError, MockResponse
+from pytest_mockllm.providers._gemini_legacy import _LEGACY_ACTIVE, LegacyGeminiMock
 
 
-class GeminiMock(MockLLM):
+class GeminiMock(LegacyGeminiMock):
+    """Mock google.genai.Client and its async models and chat interfaces.
+
+    The optional deprecated google.generativeai adapter is retained for one
+    migration cycle. New responses use real google.genai.types models.
     """
-    Mock for Google Generative AI (Gemini) SDK.
-
-    Supports:
-        - model.generate_content()
-        - model.generate_content() with streaming
-        - Chat sessions
-        - Embeddings
-
-    Example:
-        >>> def test_gemini_bot(mock_gemini):
-        ...     mock_gemini.add_response("Here's what I found...")
-        ...
-        ...     import google.generativeai as genai
-        ...     model = genai.GenerativeModel("gemini-1.5-pro")
-        ...     response = model.generate_content("Tell me about AI")
-        ...     assert "found" in response.text.lower()
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._default_model: str = "gemini-1.5-pro"
 
     def _raise_provider_error(self, error: MockError) -> None:
-        """Raise a Gemini-style API error."""
-        try:
-            from google.api_core import exceptions
+        if _LEGACY_ACTIVE.get():
+            return super()._raise_provider_error(error)
+        from google.genai import errors
 
-            error_classes = {
-                "rate_limit": exceptions.ResourceExhausted,
-                "auth": exceptions.Unauthenticated,
-                "timeout": exceptions.DeadlineExceeded,
-                "server": exceptions.InternalServerError,
-                "invalid_request": exceptions.InvalidArgument,
-            }
+        code, status = {
+            "rate_limit": (429, "RESOURCE_EXHAUSTED"),
+            "auth": (401, "UNAUTHENTICATED"),
+            "timeout": (504, "DEADLINE_EXCEEDED"),
+            "server": (500, "INTERNAL"),
+            "invalid_request": (400, "INVALID_ARGUMENT"),
+        }.get(error.error_type, (500, "INTERNAL"))
+        cls = errors.ClientError if code < 500 else errors.ServerError
+        raise cls(code, {"error": {"code": code, "status": status, "message": error.message}})
 
-            error_class = error_classes.get(error.error_type, exceptions.GoogleAPIError)
-            raise error_class(error.message)
-        except ImportError:
-            raise RuntimeError(f"Gemini API Error ({error.error_type}): {error.message}") from None
+    def _build_genai_response(self, response: MockResponse, model: str, config: Any = None) -> Any:
+        from google.genai import types
 
-    def _create_generation(self, **kwargs: Any) -> Any:
-        """Create a mock content generation response."""
-        self._record_call(type="generate_content", **kwargs)
-        model = kwargs.get("model", self._default_model)
-        response = self._get_next_response(model=model)
-        self._simulate_delay(self._get_delay_ms(response))
-        return self._build_generation_response(response)
-
-    def _build_generation_response(self, response: MockResponse) -> Any:
-        """Build a Gemini-style GenerateContentResponse."""
-        try:
-            from google.ai.generativelanguage_v1beta import (
-                Candidate,
-                Content,
-                Part,
+        parts = [types.Part(text=response.content)] if response.content else []
+        for tool in response.tool_calls or []:
+            function = tool["function"]
+            arguments = function.get("arguments", {})
+            if isinstance(arguments, str):
+                arguments = json.loads(arguments)
+            parts.append(
+                types.Part(function_call=types.FunctionCall(name=function["name"], args=arguments))
             )
-            from google.ai.generativelanguage_v1beta import (
-                GenerateContentResponse as ProtoResponse,
+        if not parts:
+            parts = [types.Part(text="")]
+        usage = response.token_usage
+        result = types.GenerateContentResponse(
+            candidates=[
+                types.Candidate(
+                    content=types.Content(role="model", parts=parts),
+                    finish_reason=types.FinishReason.STOP,
+                    index=0,
+                )
+            ],
+            model_version=model,
+            usage_metadata=types.GenerateContentResponseUsageMetadata(
+                prompt_token_count=usage.prompt_tokens if usage else 0,
+                candidates_token_count=usage.completion_tokens if usage else 0,
+                total_token_count=usage.total_tokens if usage else 0,
+            ),
+        )
+        schema = (
+            config.get("response_schema")
+            if isinstance(config, dict)
+            else getattr(config, "response_schema", None)
+        )
+        if schema is not None:
+            result.parsed = (
+                schema.model_validate_json(response.content)
+                if hasattr(schema, "model_validate_json")
+                else json.loads(response.content)
             )
-            from google.generativeai.types import GenerateContentResponse
+        return result
 
-            # Build proto-style response
-            proto = ProtoResponse(
-                candidates=[
-                    Candidate(
-                        content=Content(
-                            parts=[Part(text=response.content)],
-                            role="model",
-                        ),
-                        finish_reason=1,  # STOP
-                        index=0,
-                    )
-                ],
-                usage_metadata={
-                    "prompt_token_count": response.token_usage.prompt_tokens
-                    if response.token_usage
-                    else 10,
-                    "candidates_token_count": response.token_usage.completion_tokens
-                    if response.token_usage
-                    else 50,
-                    "total_token_count": response.token_usage.total_tokens
-                    if response.token_usage
-                    else 60,
-                },
-            )
-
-            return GenerateContentResponse.from_response(proto)
-        except ImportError:
-            return self._build_mock_generation(response)
-
-    def _build_mock_generation(self, response: MockResponse) -> MagicMock:
-        """Build a MagicMock generation when google-generativeai not installed."""
-        mock = MagicMock()
-        mock.text = response.content
-
-        # Candidates
-        candidate = MagicMock()
-        candidate.content.parts = [MagicMock(text=response.content)]
-        candidate.content.role = "model"
-        candidate.finish_reason = "STOP"
-        mock.candidates = [candidate]
-
-        # Usage metadata
-        mock.usage_metadata = MagicMock()
-        mock.usage_metadata.prompt_token_count = (
-            response.token_usage.prompt_tokens if response.token_usage else 10
+    def _genai_response(
+        self, model: str, contents: Any, config: Any, stream: bool = False
+    ) -> MockResponse:
+        self._record_call(
+            type="generate_content_stream" if stream else "generate_content",
+            model=model,
+            contents=contents,
+            config=config,
+            stream=stream,
         )
-        mock.usage_metadata.candidates_token_count = (
-            response.token_usage.completion_tokens if response.token_usage else 50
-        )
-        mock.usage_metadata.total_token_count = (
-            response.token_usage.total_tokens if response.token_usage else 60
-        )
+        return self._get_next_response(model=model)
 
-        return mock
-
-    async def _create_async_generation(self, **kwargs: Any) -> Any:
-        """Create a mock async content generation response."""
-        self._record_call(type="generate_content", **kwargs)
-        model = kwargs.get("model", self._default_model)
-        response = self._get_next_response(model=model)
-        await self._simulate_delay_async(self._get_delay_ms(response))
-        return self._build_generation_response(response)
-
-    async def _create_async_streaming_generation(self, **kwargs: Any) -> AsyncIterator[Any]:
-        """Create an async streaming content generation response."""
-        self._record_call(type="generate_content", stream=True, **kwargs)
-        model = kwargs.get("model", self._default_model)
-        response = self._get_next_response(model=model)
-        await self._simulate_delay_async(self._get_delay_ms(response))
-
-        # Split content into chunks
-        if response.stream_chunks:
-            chunks = response.stream_chunks
-        else:
+    def _genai_chunks(self, response: MockResponse, model: str) -> Iterator[Any]:
+        chunks = response.stream_chunks
+        if chunks is None:
             words = response.content.split()
             chunks = [word + " " for word in words[:-1]] + [words[-1]] if words else [""]
-
-        for i, chunk_content in enumerate(chunks):
-            is_last = i == len(chunks) - 1
-            yield self._build_stream_chunk(chunk_content, is_last, response)
-
-    def _create_streaming_generation(self, **kwargs: Any) -> Iterator[Any]:
-        """Create a streaming content generation response."""
-        self._record_call(type="generate_content", stream=True, **kwargs)
-        model = kwargs.get("model", self._default_model)
-        response = self._get_next_response(model=model)
-        self._simulate_delay(self._get_delay_ms(response))
-
-        # Split content into chunks
-        if response.stream_chunks:
-            chunks = response.stream_chunks
-        else:
-            words = response.content.split()
-            chunks = [word + " " for word in words[:-1]] + [words[-1]] if words else [""]
-
-        for i, chunk_content in enumerate(chunks):
-            is_last = i == len(chunks) - 1
-            yield self._build_stream_chunk(chunk_content, is_last, response)
-
-    def _build_stream_chunk(
-        self,
-        content: str,
-        is_last: bool,
-        response: MockResponse,
-    ) -> Any:
-        """Build a streaming chunk."""
-        mock = MagicMock()
-        mock.text = content
-
-        candidate = MagicMock()
-        candidate.content.parts = [MagicMock(text=content)]
-        candidate.content.role = "model"
-        candidate.finish_reason = "STOP" if is_last else None
-        mock.candidates = [candidate]
-
-        return mock
-
-    def _create_chat_session(self) -> MagicMock:
-        """Create a mock chat session."""
-        session = MagicMock()
-
-        def send_message(content: str, **kwargs: Any) -> Any:
-            self._record_call(type="chat.send_message", content=content, **kwargs)
-            response = self._get_next_response()
-            return self._build_mock_generation(response)
-
-        session.send_message = send_message
-        session.history = []
-
-        return session
+        for index, text in enumerate(chunks):
+            last = index == len(chunks) - 1
+            result = self._build_genai_response(
+                replace(response, content=text, tool_calls=response.tool_calls if last else None),
+                model,
+            )
+            if not last:
+                result.candidates[0].finish_reason = None
+                result.usage_metadata = None
+            yield result
 
     def __enter__(self) -> GeminiMock:
-        """Start mocking Gemini API calls."""
-        mock_module = MagicMock()
-
-        # Create mock GenerativeModel class
-        def mock_model_class(model_name: str = "gemini-1.5-pro", **kwargs: Any) -> MagicMock:
-            model = MagicMock()
-            model.model_name = model_name
-
-            def generate_content(*args: Any, **kw: Any) -> Any:
-                if kw.get("stream", False):
-                    return self._create_streaming_generation(**kw)
-                return self._create_generation(**kw)
-
-            async def generate_content_async(*args: Any, **kw: Any) -> Any:
-                if kw.get("stream", False):
-                    return self._create_async_streaming_generation(**kw)
-                return await self._create_async_generation(**kw)
-
-            model.generate_content = generate_content
-            model.generate_content_async = generate_content_async
-            model.start_chat = lambda **kw: self._create_chat_session()
-
-            async def start_chat_async(**kw: Any) -> Any:
-                # Chat sessions in Gemini are mostly local state management
-                # but we'll provide an async variant if needed
-                return self._create_chat_session()
-
-            model.start_chat_async = start_chat_async
-            model.count_tokens = lambda content: MagicMock(
-                total_tokens=len(str(content).split()) * 1.3
-            )
-
-            async def count_tokens_async(content: Any) -> Any:
-                return MagicMock(total_tokens=len(str(content).split()) * 1.3)
-
-            model.count_tokens_async = count_tokens_async
-
-            return model
-
-        mock_module.GenerativeModel = mock_model_class
-        mock_module.configure = MagicMock()
-
         try:
-            import google.generativeai as genai
-        except ImportError:
-            module_patcher = patch.dict("sys.modules", {"google.generativeai": mock_module})
-            self._patches.append(module_patcher)
-            module_patcher.start()
-        else:
-            # Patch the real module object so imports performed before fixture activation
-            # observe the replacement too.
-            model_patcher = patch.object(genai, "GenerativeModel", mock_model_class)
-            self._patches.append(model_patcher)
-            model_patcher.start()
+            super().__enter__()
 
-        self._mock_module = mock_module
-        return self
+            def generate(_instance: Any, *, model: str, contents: Any, config: Any = None) -> Any:
+                response = self._genai_response(model, contents, config)
+                self._simulate_delay(self._get_delay_ms(response))
+                return self._build_genai_response(response, model, config)
 
-    @property
-    def module(self) -> MagicMock:
-        """Access the mock module directly for advanced usage."""
-        return self._mock_module
+            async def async_generate(
+                _instance: Any, *, model: str, contents: Any, config: Any = None
+            ) -> Any:
+                response = self._genai_response(model, contents, config)
+                await self._simulate_delay_async(self._get_delay_ms(response))
+                return self._build_genai_response(response, model, config)
+
+            def stream(
+                _instance: Any, *, model: str, contents: Any, config: Any = None
+            ) -> Iterator[Any]:
+                response = self._genai_response(model, contents, config, stream=True)
+                self._simulate_delay(self._get_delay_ms(response))
+                yield from self._genai_chunks(response, model)
+
+            async def async_stream(
+                _instance: Any, *, model: str, contents: Any, config: Any = None
+            ) -> AsyncIterator[Any]:
+                response = self._genai_response(model, contents, config, stream=True)
+                await self._simulate_delay_async(self._get_delay_ms(response))
+
+                async def chunks() -> AsyncIterator[Any]:
+                    for chunk in self._genai_chunks(response, model):
+                        yield chunk
+
+                return chunks()
+
+            def blocked(*args: Any, **kwargs: Any) -> Any:
+                raise RuntimeError("Gemini network blocked by active mock_gemini fixture")
+
+            async def async_blocked(*args: Any, **kwargs: Any) -> Any:
+                raise RuntimeError("Gemini network blocked by active mock_gemini fixture")
+
+            for target, replacement in [
+                ("google.genai.models.Models.generate_content", generate),
+                ("google.genai.models.Models.generate_content_stream", stream),
+                ("google.genai.models.AsyncModels.generate_content", async_generate),
+                ("google.genai.models.AsyncModels.generate_content_stream", async_stream),
+                ("google.genai._api_client.BaseApiClient.request", blocked),
+                ("google.genai._api_client.BaseApiClient.request_streamed", blocked),
+                ("google.genai._api_client.BaseApiClient.async_request", async_blocked),
+                ("google.genai._api_client.BaseApiClient.async_request_streamed", async_blocked),
+            ]:
+                patcher = patch(target, new=replacement)
+                patcher.start()
+                self._patches.append(patcher)
+            return self
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise

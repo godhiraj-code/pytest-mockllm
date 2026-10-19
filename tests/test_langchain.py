@@ -90,3 +90,15 @@ def test_with_structured_output_include_raw_uses_langchain_envelope():
     assert result["raw"].content == _model_json(response_model)
     assert isinstance(result["parsed"], HabitantsResponse)
     assert result["parsing_error"] is None
+
+@pytest.mark.asyncio
+async def test_langchain_typed_async_and_stream_results(mock_langchain):
+    from langchain_core.messages import AIMessage, AIMessageChunk
+    mock_langchain.add_responses('async answer', 'streamed answer')
+    model = ChatOpenAI(model='gpt-4o-mini', api_key='fixture-only')
+    result = await model.ainvoke('hi')
+    assert isinstance(result, AIMessage)
+    assert result.content == 'async answer'
+    chunks = [chunk async for chunk in model.astream('hi')]
+    assert all(isinstance(chunk, AIMessageChunk) for chunk in chunks)
+    assert ''.join(chunk.content for chunk in chunks) == 'streamed answer'

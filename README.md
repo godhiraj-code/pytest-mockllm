@@ -1,374 +1,336 @@
-<h1 align="center">pytest-mockllm</h1>
+Tests that call real LLM APIs are slow, cost money, and give different answers each run.
 
-<p align="center">
-  <strong>Fixture-scoped LLM mocking for pytest</strong>
-</p>
+# pytest-mockllm
 
-<p align="center">
-  <a href="https://pypi.org/project/pytest-mockllm/"><img src="https://img.shields.io/pypi/v/pytest-mockllm?color=blue" alt="PyPI version"></a>
-  <a href="https://pypi.org/project/pytest-mockllm/"><img src="https://img.shields.io/pypi/pyversions/pytest-mockllm" alt="Python versions"></a>
-  <a href="https://github.com/godhiraj-code/pytest-mockllm/actions"><img src="https://github.com/godhiraj-code/pytest-mockllm/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/godhiraj-code/pytest-mockllm/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
-  <a href="https://pypi.org/project/pytest-mockllm/"><img src="https://img.shields.io/pypi/dm/pytest-mockllm" alt="Downloads"></a>
-</p>
+Configure the answer, run your Python code, and assert what it sent to the model.
+Auto-discovered pytest fixtures for OpenAI, Anthropic, Google Gemini, and LangChain.
+MIT licensed. No API key is needed for mocked tests.
 
-<p align="center">
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#supported-integrations">Supported Integrations</a> •
-  <a href="#examples">Examples</a> •
-  <a href="#recording-and-replay">Recording</a> •
-  <a href="#configuration">Configuration</a>
-</p>
-
----
-
-> [!IMPORTANT]
-> **Interception is fixture-scoped.** Calls made through an active provider fixture such as
-> `mock_openai` are intercepted locally. Installing the plugin alone does not block network
-> access from tests that do not request a mock fixture. Keep real API keys out of unit-test
-> environments and use normal CI egress controls as a second safety layer.
-
-## Why pytest-mockllm?
-
-Provider calls make unit tests slower, non-deterministic, dependent on secrets, and potentially
-costly. `pytest-mockllm` supplies auto-discovered pytest fixtures that return configured responses
-and record call details without contacting the provider on supported fixture paths.
-
-```python
-def test_my_chatbot(mock_openai):
-    mock_openai.add_response("Hello! I'm here to help.")
-
-    response = my_chatbot.chat("Hi there!")
-
-    assert "help" in response.lower()
-    assert mock_openai.call_count == 1
-```
-
-## Quick Start
-
-### Installation
-
-Install the extra for the SDK used by your test:
+## 30-second quickstart
 
 ```bash
 pip install "pytest-mockllm[openai]"
 ```
 
-Available extras are:
-
-```bash
-pip install "pytest-mockllm[anthropic]"
-pip install "pytest-mockllm[google]"
-pip install "pytest-mockllm[langchain]"
-```
-
-The `langchain` extra includes `langchain-core` and `langchain-openai`, which are required by the
-LangChain example below. Use `pytest-mockllm[all]` to install every supported integration. A base
-`pip install pytest-mockllm` installs the pytest plugin and its core runtime dependencies, but not
-the optional provider SDKs.
-
-The plugin is discovered automatically through its `pytest11` entry point; no `pytest_plugins`
-setting or fixture import is required.
-
-### Your First Test
+Save this as `test_chat.py`, then run `pytest`:
 
 ```python
-def test_customer_support_bot(mock_openai):
-    mock_openai.add_response("I can help with your order. What's your order number?")
+from openai import OpenAI
 
-    from openai import OpenAI
 
-    client = OpenAI(api_key="fixture-only")
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": "I need help with my order"}],
-    )
-
-    assert "order number" in response.choices[0].message.content.lower()
+def test_chat(mock_openai):
+    mock_openai.add_response("Hello, Ada!")
+    with OpenAI(api_key="fixture-only") as client:
+        reply = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "My name is Ada"}],
+        )
+    assert reply.choices[0].message.content == "Hello, Ada!"
     assert mock_openai.call_count == 1
-    assert mock_openai.last_call["model"] == "gpt-4o"
+    assert mock_openai.last_call["model"] == "gpt-4o-mini"
+    assert "Ada" in mock_openai.last_call["messages"][0]["content"]
 ```
 
-The placeholder key only satisfies the SDK constructor. The active fixture intercepts the
-supported call before transport.
+In your application tests, call your own function in place of the SDK call above.
+The fixture intercepts supported SDK calls, including clients imported or created
+before the fixture starts. No fixture imports or `pytest_plugins` setting are needed.
+The placeholder key satisfies SDK construction; it is never sent by the mock.
 
-## Supported Integrations
+## Providers
 
-| Fixture | Install extra | Intercepted interfaces |
-|---|---|---|
-| `mock_openai` | `openai` | Chat Completions, Responses create/parse, embeddings; sync/async; chat streaming and tool-call chunks |
-| `mock_anthropic` | `anthropic` | Messages; sync/async; text and tool-use streaming |
-| `mock_gemini` | `google` | `GenerativeModel.generate_content`, async generation, streaming, and chat sessions |
-| `mock_langchain` | `langchain` | Installed ChatOpenAI-compatible classes plus direct mock model `invoke`, `ainvoke`, `stream`, `astream`, and structured output |
-| `mock_llm` | matching provider extra | OpenAI by default; select `openai`, `anthropic`, or `gemini` with `@pytest.mark.llm_mock` |
+Install only what you use: `[openai]`, `[anthropic]`, `[google]`, or `[langchain]`.
+`[all]` installs the current integrations; the base package does not install provider SDKs.
 
-OpenAI and Anthropic supported paths return official SDK response/event objects when their SDKs
-are installed. Their active fixtures also block unhandled requests at the SDK base-request layer,
-including requests from clients created before fixture activation. Gemini and LangChain replace
-the supported high-level entry points listed above; they are not global network guards for every
-function exposed by those libraries.
+| Fixture | Supported interfaces |
+| --- | --- |
+| `mock_openai` | Chat Completions, Responses create/parse, embeddings; sync/async; text and function-call streams |
+| `mock_anthropic` | Messages create/stream; sync/async; text and tool-use streams |
+| `mock_gemini` | `google.genai.Client` models generate_content/generate_content_stream, chat sessions; sync/async |
+| `mock_langchain` | ChatOpenAI-compatible invoke/ainvoke, stream/astream, structured output; direct `mock_langchain.model` |
+| `mock_llm` | OpenAI by default; select a provider with `@pytest.mark.llm_mock(provider="anthropic")` |
 
-The `google` extra currently targets the legacy `google-generativeai` package. That upstream SDK is
-deprecated; support for its replacement, `google-genai`, has not been implemented yet.
+These are scoped test doubles, not complete emulators. Installing the plugin alone
+blocks no traffic. Active OpenAI, Anthropic, and modern Gemini mocks reject unhandled
+HTTP SDK requests. Realtime/WebSocket APIs, file uploads, and arbitrary network traffic
+are outside this guarantee. LangChain and legacy Gemini intercept their documented
+methods only. SDK constructor validation still applies.
 
-All fixtures support queued deterministic responses, strict mode, call tracking, token/cost
-estimates, and deterministic error simulation. Response fidelity is limited to the interfaces in
-the table; this package does not claim complete coverage of every provider API.
-
-## Provider Examples
-
-### OpenAI
+### OpenAI Responses API
 
 ```python
-def test_openai(mock_openai):
-    mock_openai.add_response("The answer is 42")
+from openai import OpenAI
+from pydantic import BaseModel
 
-    from openai import OpenAI
 
-    client = OpenAI(api_key="fixture-only")
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": "What is the meaning of life?"}],
-    )
+class Contact(BaseModel):
+    name: str
 
-    assert response.choices[0].message.content == "The answer is 42"
+
+def test_responses(mock_openai):
+    mock_openai.add_response('{"name":"Ada"}')
+    with OpenAI(api_key="fixture-only") as client:
+        result = client.responses.parse(
+            model="gpt-4o-mini", input="Extract Ada's name", text_format=Contact,
+        )
+    assert result.output_parsed == Contact(name="Ada")
 ```
 
 ### Anthropic
 
 ```python
-def test_anthropic(mock_anthropic):
-    mock_anthropic.add_response("I'd be happy to help!")
+from anthropic import Anthropic
 
-    from anthropic import Anthropic
 
-    client = Anthropic(api_key="fixture-only")
-    response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": "Hello Claude!"}],
-    )
-
-    assert "happy" in response.content[0].text
+def test_claude(mock_anthropic):
+    mock_anthropic.add_response("Your order is on its way.")
+    with Anthropic(api_key="fixture-only") as client:
+        reply = client.messages.create(
+            model="claude-sonnet-4-5", max_tokens=100,
+            messages=[{"role": "user", "content": "Where is my order?"}],
+        )
+    assert reply.content[0].text == "Your order is on its way."
 ```
 
 ### Google Gemini
 
+The `[google]` extra uses **google-genai**, not the retired google-generativeai SDK.
+For a migration period, `[google-legacy]` also installs the old SDK; its existing
+`GenerativeModel` adapter remains available with a deprecation warning.
+
 ```python
+from google import genai
+
+
 def test_gemini(mock_gemini):
-    mock_gemini.add_response("Here's what I found...")
-
-    import google.generativeai as genai
-
-    model = genai.GenerativeModel("gemini-1.5-pro")
-    response = model.generate_content("Tell me about AI")
-
-    assert "found" in response.text
+    mock_gemini.add_response("Paris")
+    with genai.Client(api_key="fixture-only") as client:
+        reply = client.models.generate_content(
+            model="gemini-2.5-flash", contents="Capital of France?",
+        )
+    assert reply.text == "Paris"
+    assert mock_gemini.last_call["contents"] == "Capital of France?"
 ```
+
+`client.chats.create(...).send_message(...)`, `client.aio.models.generate_content(...)`,
+and `await client.aio.models.generate_content_stream(...)` use the same response queue.
+Generated responses expose SDK `candidates`, `function_calls`, and `usage_metadata`.
 
 ### LangChain
 
 ```python
-def test_langchain(mock_langchain):
-    mock_langchain.add_response("Paris is the capital of France.")
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 
-    from langchain_core.prompts import ChatPromptTemplate
-    from langchain_openai import ChatOpenAI
 
-    llm = ChatOpenAI(model="gpt-4o", api_key="fixture-only")
-    prompt = ChatPromptTemplate.from_template("What is the capital of {country}?")
-    chain = prompt | llm
-
-    result = chain.invoke({"country": "France"})
-
-    assert "Paris" in result.content
+def test_chain(mock_langchain):
+    mock_langchain.add_response("Paris")
+    prompt = ChatPromptTemplate.from_template("Capital of {country}?")
+    model = ChatOpenAI(model="gpt-4o-mini", api_key="fixture-only")
+    assert (prompt | model).invoke({"country": "France"}).content == "Paris"
 ```
 
-## Examples
+This replaces the model call, so it does not exercise LangChain's provider transport,
+callbacks, or automatic tool execution. Tool responses do not execute your Python tools.
 
-### Multiple Responses
-
-```python
-def test_conversation(mock_openai):
-    mock_openai.add_responses(
-        "Hi! How can I help you today?",
-        "I can help with that order.",
-        "Your order has been updated.",
-    )
-
-    assert "help" in chatbot.send("Hello")
-    assert "order" in chatbot.send("I need to change my order")
-    assert "updated" in chatbot.send("Change quantity to 5")
-```
-
-### Streaming Responses
-
-```python
-def test_streaming(mock_openai):
-    mock_openai.add_response("This is a streaming response that comes in chunks")
-
-    from openai import OpenAI
-
-    client = OpenAI(api_key="fixture-only")
-    stream = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": "Tell me a story"}],
-        stream=True,
-    )
-
-    full_response = "".join(
-        chunk.choices[0].delta.content or ""
-        for chunk in stream
-    )
-    assert "streaming" in full_response
-```
-
-### Function and Tool Calling
-
-```python
-def test_function_calling(mock_openai):
-    mock_openai.add_response(
-        "",
-        tool_calls=[{
-            "id": "call_123",
-            "function": {
-                "name": "get_weather",
-                "arguments": {"location": "San Francisco", "unit": "celsius"},
-            },
-        }],
-    )
-
-    from openai import OpenAI
-
-    client = OpenAI(api_key="fixture-only")
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": "What's the weather?"}],
-    )
-
-    tool_call = response.choices[0].message.tool_calls[0]
-    assert tool_call.function.name == "get_weather"
-    assert mock_openai.last_call["model"] == "gpt-4o"
-```
-
-### Token Usage and Cost Assertions
-
-```python
-def test_stays_within_budget(mock_openai):
-    from pytest_mockllm.core import TokenUsage, estimate_cost
-
-    mock_openai.add_response(
-        "A detailed response...",
-        token_usage=TokenUsage(prompt_tokens=500, completion_tokens=1000),
-    )
-
-    my_function()
-
-    assert mock_openai.total_tokens < 2000
-    cost = estimate_cost(
-        "gpt-4o",
-        mock_openai.total_prompt_tokens,
-        mock_openai.total_completion_tokens,
-    )
-    assert cost < 0.05
-```
-
-### Error Simulation
-
-```python
-def test_handles_rate_limit(mock_openai):
-    mock_openai.simulate_error("rate_limit", times=1)
-    mock_openai.add_response("recovered")
-
-    # The first supported provider call raises a provider-style rate-limit error.
-    # The next call returns "recovered".
-
-
-def test_handles_jitter(mock_openai):
-    mock_openai.simulate_jitter(max_ms=500)
-
-
-def test_random_failures(mock_openai):
-    mock_openai.simulate_random_errors(probability=0.1)
-```
-
-### Strict Mode
+## Async and streaming
 
 ```python
 import pytest
+from openai import AsyncOpenAI, OpenAI
 
 
-def test_catches_unconfigured_calls(mock_openai):
-    mock_openai.set_strict_mode(True)
+@pytest.mark.asyncio
+async def test_async(mock_openai):
+    mock_openai.add_response("Async answer")
+    async with AsyncOpenAI(api_key="fixture-only") as client:
+        reply = await client.chat.completions.create(model="gpt-4o-mini", messages=[])
+    assert reply.choices[0].message.content == "Async answer"
 
-    with pytest.raises(RuntimeError, match="No mock response configured"):
-        my_function_that_calls_llm()
+
+def test_stream(mock_openai):
+    mock_openai.add_response("Hello world", stream_chunks=["Hello ", "world"])
+    with OpenAI(api_key="fixture-only") as client:
+        stream = client.chat.completions.create(
+            model="gpt-4o-mini", messages=[], stream=True,
+        )
+        text = "".join(chunk.choices[0].delta.content or "" for chunk in stream)
+    assert text == "Hello world"
 ```
 
-## Recording and Replay
+Anthropic `messages.create(stream=True)` yields official SDK events, including
+`content_block_delta`. Use `tool_call_chunks` for fragmented JSON arguments in OpenAI
+chat and Anthropic tool streams. Both provider mocks and record/replay support SDK stream context managers.
+OpenAI Responses streams also support `get_final_response()` and structured parsing.
 
-Recording and replay are currently unavailable. Earlier releases exposed the interface without
-safely intercepting provider calls. Current `auto`, `record`, and `replay` modes fail before test
-code can reach a provider instead of allowing an apparent replay test to fall through to a live
-API. Use the deterministic provider fixtures until recording returns with provider-level
-behavioral tests.
+## Tool calls
 
-The `--llm-record`, `--llm-cassette-dir`, `llm_record`, and `llm_replay` names remain reserved for
-future compatibility; using them with `llm_recorder` does not create or replay cassettes today.
+```python
+import json
+from openai import OpenAI
 
-## Configuration
 
-### Strict Mode
+def test_tool_call(mock_openai):
+    mock_openai.add_response("", tool_calls=[{
+        "id": "call_weather",
+        "function": {"name": "weather", "arguments": {"city": "Paris"}},
+    }])
+    with OpenAI(api_key="fixture-only") as client:
+        reply = client.chat.completions.create(model="gpt-4o-mini", messages=[])
+    tool = reply.choices[0].message.tool_calls[0]
+    assert tool.function.name == "weather"
+    assert json.loads(tool.function.arguments) == {"city": "Paris"}
+```
+
+The same `tool_calls` configuration produces Anthropic `tool_use` blocks and Gemini
+function-call parts. Configure what the model returns, then test whether your application
+validates the arguments and invokes the right tool.
+
+## Errors, retries, and strict mode
+
+```python
+import pytest
+from openai import OpenAI, RateLimitError
+
+
+def test_retry_logic(mock_openai):
+    mock_openai.simulate_error("rate_limit", times=1)
+    mock_openai.add_response("Recovered")
+    with OpenAI(api_key="fixture-only") as client:
+        with pytest.raises(RateLimitError):
+            client.chat.completions.create(model="gpt-4o-mini", messages=[])
+        reply = client.chat.completions.create(model="gpt-4o-mini", messages=[])
+    assert reply.choices[0].message.content == "Recovered"
+    assert [call["outcome"] for call in mock_openai.request_ledger] == ["rate_limit", "success"]
+```
+
+Mock errors occur at the SDK method boundary: use them to test **your application's**
+retry handling. To exercise the SDK's internal HTTP retry loop, use record/replay.
+Supported errors include `rate_limit`, `auth`, `timeout`, `server`, and `invalid_request`;
+Anthropic also supports `overloaded`. `after_calls=N` delays an error until N successes.
+`times=N` bounds it. `call_count` counts successful configured responses; `calls` and
+`request_ledger` include failed attempts.
+
+Use `add_responses("first", "second")` to queue answers. After the queue is exhausted,
+`set_default_response(...)` supplies a fallback; otherwise non-strict mode returns a
+placeholder answer. Strict mode catches missing responses:
 
 ```bash
 pytest --llm-strict
 ```
 
-Strict mode makes a provider fixture fail when a supported call has no configured response. It can
-also be enabled in pytest configuration:
+Or call `mock_openai.set_strict_mode()` in one test. Token usage is configurable with
+`TokenUsage`; cost estimates use a static price table and are not billing measurements.
+Token counting uses preloaded tiktoken encoders when available, otherwise a character
+estimate. It never downloads tokenizers implicitly; preload an encoder explicitly if
+you need exact tokenization, or supply `TokenUsage` for deterministic budget tests.
+
+## Record real responses once, replay offline
+
+Use `llm_recorder` **instead of** a provider mock fixture. It captures OpenAI Chat
+Completions, Responses (including structured parsing), embeddings, and Anthropic Messages.
+The SDK parses the recorded HTTP JSON or SSE into its normal response objects.
+
+```python
+import os
+from openai import OpenAI
+
+
+def test_recorded_reply(llm_recorder):
+    with OpenAI(api_key=os.getenv("OPENAI_API_KEY", "replay-only")) as client:
+        reply = client.responses.create(model="gpt-4o-mini", input="Say hello.")
+    assert reply.output_text
+```
+
+Set your provider key in the environment for the first run:
+
+```bash
+pytest test_recorded.py --llm-record=once  # real API calls if no cassette exists
+pytest test_recorded.py                   # offline replay; no key needed
+```
+
+| Mode | Existing matching interaction | Missing/exhausted interaction |
+| --- | --- | --- |
+| `none` (default) | Replay | Fail without sending HTTP |
+| `once` | Replay | Record only if the cassette file did not exist on entry |
+| `new_episodes` | Replay | Record and append |
+| `all` | Record again | Record; replace the old cassette |
+
+Bare `--llm-record` means `all` for compatibility. Live modes make billable API calls.
+The flag affects tests using `llm_recorder` or the markers; it does not activate recording
+across your entire suite. `@pytest.mark.llm_record` activates the fixture, with offline
+defaults. `@pytest.mark.llm_record(mode="once")` selects a mode for one test.
+`@pytest.mark.llm_replay` forces offline replay even when the CLI requests recording.
+
+Cassettes live under `tests/llm_cassettes/`, relative to pytest's root directory. Names
+include a hash of the full test ID, including module, class, and parameters. Override
+with `--llm-cassette-dir=...` or `llm_cassette_dir`. Review and commit cassettes for CI;
+the repository's own local cassette directory is ignored by Git.
+
+Matching includes provider, HTTP method, URL/query, JSON request body (including model,
+prompt, tools, sampling parameters, and stream flag), and selected API-version/project
+headers. Credential and SDK telemetry headers do not affect matching. Identical requests
+consume recorded responses in order; a cassette cannot be replayed infinitely in one test.
+Changing the base URL or a prompt requires a matching recording.
+
+Credential headers and query parameters, known key/token patterns, and credentials used
+by the SDK are redacted, including echoes in JSON or SSE. JSON fields named `key`, `token`,
+or `auth` are preserved unless their values contain a recognized secret. This is **not general
+PII removal**: prompts and model output remain readable. Review cassettes before committing.
+Redacted fields replay as redacted values.
+
+Recording buffers the complete response, including streams, before handing it to the SDK;
+replay preserves SSE events and tool fragments, not network timing. Incomplete HTTP reads
+are not saved. Completed interactions are saved atomically even if a later test assertion
+fails. OpenAI/Anthropic HTTPX and HTTPX2 clients are covered; custom clients that override
+`send` are rejected (use a custom transport instead). WebSockets, non-JSON requests,
+other SDK endpoints, Gemini recording, overlapping recorder contexts, and concurrent
+writers to the **same cassette file** are not supported. Separate tests get separate files.
+
+For direct context-manager use, choose `LLMRecorder(path, record_mode="once")`.
+Legacy `mode="auto"`, `"record"`, and `"replay"` map to once/all/none with a deprecation
+warning. Legacy `mode="none"` still means explicit live pass-through; migrate to
+`record_mode="none"` for offline replay.
+
+## How this compares
+
+| Tool | Choose it when | Where pytest-mockllm fits |
+| --- | --- | --- |
+| [unittest.mock](https://docs.python.org/3/library/unittest.mock.html) | You want general-purpose patching, specs, and call assertions with no extra dependency. | Queues, provider-shaped responses, streams, and errors require less setup here; `mock` gives more control. |
+| [respx](https://lundberg.github.io/respx/) | You want precise HTTPX route matching and transport-level assertions. | Provider fixtures avoid constructing HTTP payloads. Use a transport tool when wire behavior is the subject of your test. |
+| [vcrpy](https://vcrpy.readthedocs.io/en/latest/) | You need mature HTTP recording across multiple services and client libraries. | Our narrower recorder targets OpenAI/Anthropic JSON and SSE; vcrpy has a broader ecosystem and configuration surface. |
+| [pytest-recording](https://github.com/kiwicom/pytest-recording) | You want pytest integration for VCR.py, cassette markers, and network controls. | This plugin combines handwritten LLM responses and scoped LLM cassettes. Keep pytest-recording for general HTTP integration tests. |
+| [deepeval](https://github.com/confident-ai/deepeval) / [promptfoo](https://www.promptfoo.dev/docs/intro/) | You need to evaluate answer quality, prompt changes, or model behavior. | Those judge generated answers; this plugin tests the code around the model. Use both when you need both kinds of evidence. |
+
+A passing mocked test does not prove a prompt produces a good answer or that the live
+service accepts your request. Keep a small live integration suite and separate evaluations.
+
+## Configuration
 
 ```toml
 [tool.pytest.ini_options]
 llm_strict = true
+llm_stats = false
+llm_cassette_dir = "tests/llm_cassettes"
 ```
 
-### Universal Fixture
+Statistics are **off by default**. Enable with `pytest --llm-stats` or `llm_stats = true`;
+`--no-llm-stats` overrides both. There is no cost banner in a normal run.
 
-```python
-import pytest
+## Demo and development
 
-
-@pytest.mark.llm_mock(provider="anthropic")
-def test_with_anthropic(mock_llm):
-    mock_llm.add_response("Configured through the universal fixture")
-    # Calls through the Anthropic Messages API are intercepted here.
-```
-
-## Development
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
+[Demo tests](examples/test_demo.py) run offline. Generate an asciinema v2 recording of
+an actual run with `python scripts/record_demo.py`; play it with `asciinema play docs/demo.cast`.
+The script needs only the `[openai]` extra and does not fabricate test output.
 
 ```bash
-pip install -e ".[dev,all]"
+pip install -e ".[all,dev]" build
 pytest
 ruff check src/
 mypy src/
 python -m build
 ```
 
-## Roadmap
+See [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md), and the
+[SDK compatibility notes](docs/sdk-compatibility.md) for tested versions and limits.
 
-- [x] Async provider fixtures
-- [x] Token and cost estimates
-- [x] Deterministic latency and error simulation
-- [ ] Safe provider-level recording and replay
-- [ ] More providers
-- [ ] Process-safe pytest-xdist aggregation
-
-## Author
-
-[Dhiraj Das](https://www.dhirajdas.dev) · [Follow @dkkkkd on X](https://x.com/dkkkkd)
-
-## License
-
-MIT License — see [LICENSE](LICENSE) for details.
+MIT licensed — [LICENSE](LICENSE). Maintained by [Dhiraj Das](https://www.dhirajdas.dev).

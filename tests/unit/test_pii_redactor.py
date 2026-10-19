@@ -1,47 +1,63 @@
+from urllib.parse import parse_qs, urlsplit
+
+import pytest
+
 from pytest_mockllm.recording import PIIRedactor
 
-def test_redact_openai_key():
-    text = "The key is sk-1234567890abcdef1234567890abcdef."
-    redacted = PIIRedactor.redact_text(text)
-    assert "[REDACTED_OPENAI_KEY]" in redacted
-    assert "sk-" not in redacted
+
+@pytest.mark.parametrize(("prefix", "label"), [
+    ("sk-", "OPENAI"),
+    ("sk-proj-", "OPENAI"),
+    ("sk-ant-api03-", "ANTHROPIC"),
+    ("sk-ant-", "ANTHROPIC"),
+    ("ant-api-", "ANTHROPIC"),
+    ("AIza", "GCP"),
+])
+def test_known_key_patterns_and_labels(prefix, label):
+    key = prefix + "a" * 35
+    assert PIIRedactor.redact_text("Key: " + key) == f"Key: [REDACTED_{label}_KEY]"
+
 
 def test_redact_bearer_token():
-    text = "Authorization: Bearer my-secret-token-1234567890"
-    redacted = PIIRedactor.redact_text(text)
-    assert "Bearer [REDACTED]" in redacted
+    assert PIIRedactor.redact_text("Bearer credential") == "Bearer [REDACTED]"
+
 
 def test_redact_azure_key():
-    text = "Connecting with api-key: 1234567890abcdef1234567890abcdef"
-    redacted = PIIRedactor.redact_text(text)
-    assert "api-key: [REDACTED]" in redacted
-    assert "1234567890" not in redacted
+    assert PIIRedactor.redact_text("api-key: " + "a" * 32) == "api-key: [REDACTED]"
 
-def test_redact_gcp_key():
-    # Using a fake pattern that matches our regex but doesn't look real to GitHub
-    text = "Key: AIza_MOCK_GOOGLE_API_KEY_FOR_TESTING_123"
-    redacted = PIIRedactor.redact_text(text)
-    assert "[REDACTED_GCP_KEY]" in redacted
-    assert "AIza" not in redacted
 
-def test_redact_dict():
+def test_json_field_names_do_not_identify_secrets():
     data = {
-        "api_key": "sk-12345",
-        "api-key": "azure-secret",
-        "nested": {
-            "token": "secret-token",
-            "msg": "Hello sk-1234567890abcdef12345"
-        },
-        "list": ["AIza_MOCK_GOOGLE_API_KEY_FOR_TESTING_123", {"auth": "Bearer token"}]
+        "properties": {name: {"type": "string"} for name in [
+            "key", "token", "auth", "api_key", "authorization", "secret", "password",
+        ]},
+        "nested": [{"headers": {"Authorization": "a schema value"}}],
+        "token": "a word in a sentence",
+        "auth": "authentication method",
     }
-    redacted = PIIRedactor.redact_dict(data)
-    
-    assert redacted["api_key"] == "[REDACTED]"
-    assert redacted["api-key"] == "[REDACTED]"
-    assert redacted["nested"]["token"] == "[REDACTED]"
-    assert "[REDACTED_OPENAI_KEY]" in redacted["nested"]["msg"]
-    assert "[REDACTED_GCP_KEY]" in redacted["list"][0]
-    assert redacted["list"][1]["auth"] == "[REDACTED]"
-    # Note: 'auth' is not in SENSITIVE_KEYS, but it might contain a Bearer token
-    # Wait, 'auth' is not in my SENSITIVE_KEYS set. Let me check.
-    # PIIRedactor.SENSITIVE_KEYS = {"api_key", "api-key", "authorization", "x-api-key", "token", "access_token", "secret"}
+    assert PIIRedactor.redact_dict(data) == data
+    assert PIIRedactor.redact_http({"body": data})["body"] == data
+
+
+def test_secret_values_are_redacted_regardless_of_json_field_name():
+    data = {"nested": [{"ordinary": "sk-ant-" + "a" * 35}], "auth": "Bearer credential"}
+    assert PIIRedactor.redact_dict(data) == {
+        "nested": [{"ordinary": "[REDACTED_ANTHROPIC_KEY]"}], "auth": "Bearer [REDACTED]",
+    }
+
+
+@pytest.mark.parametrize("header", [
+    "Authorization", "X-Api-Key", "api-key", "api_key", "X-Goog-Api-Key",
+    "Proxy-Authorization", "Cookie", "Set-Cookie",
+])
+def test_credentials_are_redacted_in_header_context(header):
+    assert PIIRedactor.redact_headers({header: "unrecognizable-credential", "X-Request-ID": "req_1"}) == {
+        header: "[REDACTED]", "X-Request-ID": "req_1",
+    }
+
+
+def test_google_query_key_is_redacted_without_touching_other_parameters():
+    url = PIIRedactor.redact_url(
+        "https://generativelanguage.googleapis.com/v1beta/models?key=opaque-credential&alt=sse"
+    )
+    assert parse_qs(urlsplit(url).query) == {"key": ["[REDACTED]"], "alt": ["sse"]}

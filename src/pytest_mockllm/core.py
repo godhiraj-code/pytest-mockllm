@@ -98,8 +98,9 @@ class TokenCounter:
         """
         Count tokens in a string for a specific model.
 
-        Uses real tokenizers (tiktoken, anthropic) if installed, otherwise
-        falls back to a rough character-based estimate.
+        Uses an already-loaded tiktoken encoder when available. Otherwise it
+        returns a character estimate; implicit counting must never download data.
+        Applications wanting exact counts can explicitly preload a tiktoken encoder.
         """
         if not text:
             return 0
@@ -107,13 +108,16 @@ class TokenCounter:
         # OpenAI models
         if any(x in model.lower() for x in ["gpt-", "text-embedding-", "o1-"]):
             try:
-                import tiktoken
+                import tiktoken.model
+                import tiktoken.registry
 
                 try:
-                    encoding = tiktoken.encoding_for_model(model)
+                    name = tiktoken.model.encoding_name_for_model(model)
                 except KeyError:
-                    encoding = tiktoken.get_encoding("cl100k_base")
-                return len(encoding.encode(text))
+                    name = "cl100k_base"
+                encoding = tiktoken.registry.ENCODINGS.get(name)
+                if encoding is not None:
+                    return len(encoding.encode(text))
             except ImportError:
                 pass
 

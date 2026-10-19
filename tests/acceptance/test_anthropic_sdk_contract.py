@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 
-import httpx
+from pytest_mockllm._sdk import http_module
+
+httpx = http_module("anthropic")
 import pytest
 from anthropic import (
     Anthropic,

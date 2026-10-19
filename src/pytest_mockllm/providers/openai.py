@@ -54,49 +54,12 @@ class OpenAIMock(MockLLM):
         return self
 
     def _raise_provider_error(self, error: MockError) -> None:
-        """Raise an OpenAI-style API error."""
+        from pytest_mockllm._sdk import raise_sdk_error
+
         try:
-            from openai import (
-                APIError,
-                APITimeoutError,
-                AuthenticationError,
-                BadRequestError,
-                RateLimitError,
-            )
-
-            error_classes = {
-                "rate_limit": RateLimitError,
-                "auth": AuthenticationError,
-                "timeout": APITimeoutError,
-                "server": APIError,
-                "invalid_request": BadRequestError,
-            }
-
-            error_class = error_classes.get(error.error_type, APIError)
-
-            import httpx
-
-            status_code = {
-                "rate_limit": 429,
-                "auth": 401,
-                "timeout": 408,
-                "server": 500,
-                "invalid_request": 400,
-            }.get(error.error_type, 500)
-            mock_response = httpx.Response(
-                status_code,
-                request=httpx.Request("POST", "https://api.openai.com/v1/mock"),
-                json={"error": {"message": error.message}},
-            )
-
-            raise error_class(
-                message=error.message,
-                response=mock_response,
-                body={"error": {"message": error.message}},
-            )
+            raise_sdk_error("openai", error)
         except ImportError:
-            # If openai not installed, fall back to RuntimeError
-            raise RuntimeError(f"OpenAI API Error ({error.error_type}): {error.message}") from None
+            raise RuntimeError(f"openai API Error ({error.error_type}): {error.message}") from None
 
     def _create_chat_completion(self, **kwargs: Any) -> Any:
         """Create a mock chat completion response."""
@@ -118,16 +81,60 @@ class OpenAIMock(MockLLM):
         response = self._get_next_response(model=model)
         self._simulate_delay(self._get_delay_ms(response))
 
+        return self._response_result(response, model, text_format, kwargs.get("stream", False))
+
+    async def _create_async_response(
+        self, *, text_format: type[Any] | None = None, **kwargs: Any
+    ) -> Any:
+        call_type = "responses.parse" if text_format is not None else "responses.create"
+        self._record_call(type=call_type, text_format=text_format, **kwargs)
+        model = kwargs.get("model", self._default_model)
+        response = self._get_next_response(model=model)
+        await self._simulate_delay_async(self._get_delay_ms(response))
+        return self._response_result(
+            response, model, text_format, kwargs.get("stream", False), asynchronous=True
+        )
+
+    def _response_result(
+        self,
+        response: MockResponse,
+        model: str,
+        text_format: Any,
+        stream: bool,
+        asynchronous: bool = False,
+    ) -> Any:
+        result = self._build_response(response, model, text_format)
+        if not stream:
+            return result
+        from openai.types.responses import ResponseStreamEvent
+
+        from pytest_mockllm._sdk import sdk_stream
+        from pytest_mockllm.providers._responses import response_events
+
+        events = response_events(result, response)
+        if asynchronous:
+
+            async def async_events() -> AsyncIterator[Any]:
+                for event in events:
+                    yield event
+
+            return sdk_stream(
+                "openai", async_events(), asynchronous=True, cast_to=ResponseStreamEvent
+            )
+        return sdk_stream("openai", events, cast_to=ResponseStreamEvent)
+
+    def _build_response(self, response: MockResponse, model: str, text_format: Any = None) -> Any:
         from openai.types.responses import (
             ParsedResponse,
             ParsedResponseOutputMessage,
             ParsedResponseOutputText,
             Response,
+            ResponseFunctionToolCall,
             ResponseOutputMessage,
             ResponseOutputText,
         )
 
-        common = {
+        common: dict[str, Any] = {
             "id": response.id,
             "created_at": time.time(),
             "model": model,
@@ -136,6 +143,21 @@ class OpenAIMock(MockLLM):
             "tool_choice": "auto",
             "tools": [],
             "status": "completed",
+            "error": None,
+            "incomplete_details": None,
+            "instructions": None,
+            "metadata": {},
+            "temperature": 1.0,
+            "top_p": 1.0,
+            "usage": {
+                "input_tokens": response.token_usage.prompt_tokens,
+                "output_tokens": response.token_usage.completion_tokens,
+                "total_tokens": response.token_usage.total_tokens,
+                "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
+                "output_tokens_details": {"reasoning_tokens": 0},
+            }
+            if response.token_usage
+            else None,
         }
         if text_format is not None:
             from pydantic import TypeAdapter
@@ -153,9 +175,7 @@ class OpenAIMock(MockLLM):
             )
             return ParsedResponse[Any](output=[parsed_output_message], **common)
 
-        output_text = ResponseOutputText(
-            annotations=[], type="output_text", text=response.content
-        )
+        output_text = ResponseOutputText(annotations=[], type="output_text", text=response.content)
         output_message = ResponseOutputMessage(
             id=f"msg_{response.id}",
             content=[output_text],
@@ -163,7 +183,20 @@ class OpenAIMock(MockLLM):
             status="completed",
             type="message",
         )
-        return Response(output=[output_message], **common)
+        output: list[Any] = [output_message] if response.content or not response.tool_calls else []
+        for tool in response.tool_calls or []:
+            arguments = tool["function"].get("arguments", {})
+            output.append(
+                ResponseFunctionToolCall(
+                    id=f"fc_{uuid.uuid4().hex[:8]}",
+                    call_id=tool.get("id", f"call_{uuid.uuid4().hex[:8]}"),
+                    name=tool["function"]["name"],
+                    type="function_call",
+                    status="completed",
+                    arguments=arguments if isinstance(arguments, str) else json.dumps(arguments),
+                )
+            )
+        return Response(output=output, **common)
 
     def _build_completion_response(self, response: MockResponse, model: str) -> Any:
         """Build an OpenAI-style ChatCompletion response object."""
@@ -184,7 +217,9 @@ class OpenAIMock(MockLLM):
             choice = Choice(
                 index=0,
                 message=message,
-                finish_reason=cast(Any, response.finish_reason),
+                finish_reason=cast(
+                    Any, "tool_calls" if response.tool_calls else response.finish_reason
+                ),
             )
 
             usage = None
@@ -256,7 +291,9 @@ class OpenAIMock(MockLLM):
                     type="function",
                     function=Function(
                         name=tc["function"]["name"],
-                        arguments=json.dumps(tc["function"].get("arguments", {})),
+                        arguments=tc["function"].get("arguments", "{}")
+                        if isinstance(tc["function"].get("arguments"), str)
+                        else json.dumps(tc["function"].get("arguments", {})),
                     ),
                 )
                 for tc in tool_calls
@@ -273,72 +310,49 @@ class OpenAIMock(MockLLM):
         return self._build_completion_response(response, model)
 
     async def _create_async_streaming_completion(self, **kwargs: Any) -> AsyncIterator[Any]:
-        """Create an async streaming chat completion response."""
-        request = {**kwargs, "stream": True}
-        self._record_call(type="chat.completions.create", **request)
+        self._record_call(type="chat.completions.create", **{**kwargs, "stream": True})
         model = kwargs.get("model", self._default_model)
         response = self._get_next_response(model=model)
-
-        if response.tool_calls and response.tool_call_chunks:
-            for i, arguments in enumerate(response.tool_call_chunks):
-                yield self._build_tool_stream_chunk(
-                    response=response,
-                    model=model,
-                    arguments=arguments,
-                    is_first=i == 0,
-                    is_last=i == len(response.tool_call_chunks) - 1,
-                )
-            return
-
-        if response.stream_chunks:
-            chunks = response.stream_chunks
-        else:
-            words = response.content.split()
-            chunks = [word + " " for word in words[:-1]] + [words[-1]] if words else [""]
-
-        for i, chunk_content in enumerate(chunks):
-            yield self._build_stream_chunk(
-                chunk_content,
-                model=model,
-                is_first=(i == 0),
-                is_last=(i == len(chunks) - 1),
-                response_id=response.id,
-            )
+        await self._simulate_delay_async(self._get_delay_ms(response))
+        for chunk in self._completion_chunks(response, model):
+            yield chunk
 
     def _create_streaming_completion(self, **kwargs: Any) -> Iterator[Any]:
-        """Create a streaming chat completion response."""
-        request = {**kwargs, "stream": True}
-        self._record_call(type="chat.completions.create", **request)
+        self._record_call(type="chat.completions.create", **{**kwargs, "stream": True})
         model = kwargs.get("model", self._default_model)
         response = self._get_next_response(model=model)
+        self._simulate_delay(self._get_delay_ms(response))
+        yield from self._completion_chunks(response, model)
 
-        if response.tool_calls and response.tool_call_chunks:
-            for i, arguments in enumerate(response.tool_call_chunks):
+    def _completion_chunks(self, response: MockResponse, model: str) -> Iterator[Any]:
+        if response.content or not response.tool_calls:
+            chunks = response.stream_chunks
+            if chunks is None:
+                words = response.content.split()
+                chunks = [word + " " for word in words[:-1]] + [words[-1]] if words else [""]
+            for i, content in enumerate(chunks):
+                yield self._build_stream_chunk(
+                    content,
+                    model,
+                    i == 0,
+                    i == len(chunks) - 1 and not response.tool_calls,
+                    response.id,
+                )
+        for tool_index, tool in enumerate(response.tool_calls or []):
+            arguments = tool["function"].get("arguments", {})
+            encoded = arguments if isinstance(arguments, str) else json.dumps(arguments)
+            fragments = response.tool_call_chunks if tool_index == 0 else None
+            chunks = fragments or [encoded]
+            for i, fragment in enumerate(chunks):
                 yield self._build_tool_stream_chunk(
                     response=response,
                     model=model,
-                    arguments=arguments,
+                    arguments=fragment,
                     is_first=i == 0,
-                    is_last=i == len(response.tool_call_chunks) - 1,
+                    is_last=i == len(chunks) - 1
+                    and tool_index == len(response.tool_calls or []) - 1,
+                    tool_index=tool_index,
                 )
-            return
-
-        # Split content into chunks
-        if response.stream_chunks:
-            chunks = response.stream_chunks
-        else:
-            # Default: split by words
-            words = response.content.split()
-            chunks = [word + " " for word in words[:-1]] + [words[-1]] if words else [""]
-
-        for i, chunk_content in enumerate(chunks):
-            yield self._build_stream_chunk(
-                chunk_content,
-                model=model,
-                is_first=(i == 0),
-                is_last=(i == len(chunks) - 1),
-                response_id=response.id,
-            )
 
     def _build_tool_stream_chunk(
         self,
@@ -348,6 +362,7 @@ class OpenAIMock(MockLLM):
         arguments: str,
         is_first: bool,
         is_last: bool,
+        tool_index: int = 0,
     ) -> Any:
         """Build an official chunk containing one function-argument fragment."""
         from openai.types.chat import ChatCompletionChunk
@@ -360,10 +375,10 @@ class OpenAIMock(MockLLM):
 
         if not response.tool_calls:
             raise ValueError("A tool call is required to build a tool stream chunk")
-        tool_call = response.tool_calls[0]
+        tool_call = response.tool_calls[tool_index]
         delta_tool_call = ChoiceDeltaToolCall(
-            index=0,
-            id=tool_call.get("id") if is_first else None,
+            index=tool_index,
+            id=tool_call.get("id", f"call_{response.id}_{tool_index}") if is_first else None,
             type="function" if is_first else None,
             function=ChoiceDeltaToolCallFunction(
                 name=tool_call["function"]["name"] if is_first else None,
@@ -476,7 +491,15 @@ class OpenAIMock(MockLLM):
 
         def create_chat(*args: Any, **kwargs: Any) -> Any:
             if kwargs.get("stream", False):
-                return self._create_streaming_completion(**kwargs)
+                from openai.types.chat import ChatCompletionChunk
+
+                from pytest_mockllm._sdk import sdk_stream
+
+                return sdk_stream(
+                    "openai",
+                    self._create_streaming_completion(**kwargs),
+                    cast_to=ChatCompletionChunk,
+                )
             return self._create_chat_completion(**kwargs)
 
         def create_response(*args: Any, **kwargs: Any) -> Any:
@@ -488,15 +511,24 @@ class OpenAIMock(MockLLM):
 
         async def create_async_chat(*args: Any, **kwargs: Any) -> Any:
             if kwargs.get("stream", False):
-                return self._create_async_streaming_completion(**kwargs)
+                from openai.types.chat import ChatCompletionChunk
+
+                from pytest_mockllm._sdk import sdk_stream
+
+                return sdk_stream(
+                    "openai",
+                    self._create_async_streaming_completion(**kwargs),
+                    asynchronous=True,
+                    cast_to=ChatCompletionChunk,
+                )
             return await self._create_async_chat_completion(**kwargs)
 
         async def create_async_response(*args: Any, **kwargs: Any) -> Any:
-            return self._create_response(**kwargs)
+            return await self._create_async_response(**kwargs)
 
         async def parse_async_response(*args: Any, **kwargs: Any) -> Any:
             text_format = kwargs.pop("text_format")
-            return self._create_response(text_format=text_format, **kwargs)
+            return await self._create_async_response(text_format=text_format, **kwargs)
 
         async def create_async_embedding(*args: Any, **kwargs: Any) -> Any:
             return self._create_embedding(**kwargs)

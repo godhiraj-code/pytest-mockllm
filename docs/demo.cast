@@ -1,0 +1,9 @@
+{"version": 2, "width": 100, "height": 24, "timestamp": 1792416897, "title": "pytest-mockllm: streams, tools, retries"}
+[1.656, "o", "\u001b[1m======================================= test session starts =======================================\u001b[0m\r\n"]
+[2.531, "o", "\u001b[1mcollecting ... \u001b[0mcollected 3 items\r\n"]
+[2.531, "o", "\r\n"]
+[2.781, "o", "examples/test_demo.py::test_stream_without_an_api_key \u001b[32mPASSED\u001b[0m\u001b[32m                                 [ 33%]\u001b[0m\r\n"]
+[2.796, "o", "examples/test_demo.py::test_weather_tool_arguments \u001b[32mPASSED\u001b[0m\u001b[32m                                    [ 66%]\u001b[0m\r\n"]
+[2.796, "o", "examples/test_demo.py::test_recovers_after_rate_limit \u001b[32mPASSED\u001b[0m\u001b[32m                                 [100%]\u001b[0m\r\n"]
+[2.796, "o", "\r\n"]
+[2.796, "o", "\u001b[32m======================================== \u001b[32m\u001b[1m3 passed\u001b[0m\u001b[32m in 1.14s\u001b[0m\u001b[32m ========================================\u001b[0m\r\n"]

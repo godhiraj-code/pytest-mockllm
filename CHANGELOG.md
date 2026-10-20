@@ -98,8 +98,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Full suite exercised on Python 3.10–3.13; minimum/current SDK contract tests,
   actual local HTTP record/replay, executable README examples, and package checks.
-- No paid/live-provider validation or PyPI publication. Gemini recording, LiteLLM,
-  new assertion helpers, and a live-test environment marker are not included.
+- Published to PyPI on 2026-10-19. No paid/live-provider validation yet. Gemini
+  recording, LiteLLM, new assertion helpers, and a live-test environment marker are
+  not included.
 - See [SDK compatibility](docs/sdk-compatibility.md) for versions, test evidence,
   private-SDK-hook risk, buffered streaming, and unsupported interfaces.
 

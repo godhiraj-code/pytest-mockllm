@@ -337,4 +337,8 @@ python -m build
 See [CONTRIBUTING.md](https://github.com/godhiraj-code/pytest-mockllm/blob/v0.4.0/CONTRIBUTING.md), [CHANGELOG.md](https://github.com/godhiraj-code/pytest-mockllm/blob/v0.4.0/CHANGELOG.md), and the
 [SDK compatibility notes](https://github.com/godhiraj-code/pytest-mockllm/blob/v0.4.0/docs/sdk-compatibility.md) for tested versions and limits.
 
+## Learn more
+
+[The Automation Architect's Playbook](https://www.dhirajdas.dev/automation-book) is a free guide. The [pytest-mockllm chapter](https://www.dhirajdas.dev/automation-book#chapter-13-pytest-mockllm-testing-ai-features-without-api-costs) covers testing LLM features with deterministic fixtures, without live API calls.
+
 MIT licensed — [LICENSE](https://github.com/godhiraj-code/pytest-mockllm/blob/v0.4.0/LICENSE). Maintained by [Dhiraj Das](https://www.dhirajdas.dev).
